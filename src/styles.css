@@ -532,13 +532,16 @@ a {
   inset: 0;
   z-index: 10;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: rgba(11, 15, 40, 0.6);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   padding: 16px;
   overflow-y: auto;
+}
+.overlay > * {
+  margin: auto 0;
 }
 .pause-box {
   width: min(92vw, 380px);
@@ -818,4 +821,55 @@ input[type='range'] {
   .tagline { margin: 4px 0 10px; }
   .btn.big { font-size: 26px; padding: 12px 18px 10px; }
   .menu-buttons { gap: 8px; }
+}
+
+/* short screens (phones in landscape): compact results so AGAIN is always visible */
+@media (max-height: 560px) {
+  .results {
+    width: min(96vw, 760px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+    padding: 12px;
+    text-align: left;
+  }
+  .results > * {
+    grid-column: 1;
+  }
+  .results .breakdown {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    margin: 0;
+    font-size: 12.5px;
+    align-self: start;
+  }
+  .results .result-buttons {
+    grid-column: 2;
+    grid-row: 6 / span 2;
+    align-self: end;
+  }
+  .results .headline {
+    font-size: 30px;
+  }
+  .results .subline {
+    font-size: 14px;
+  }
+  .results .total {
+    font-size: 24px;
+    margin: 4px 0;
+  }
+  .results .roll {
+    justify-content: flex-start;
+  }
+  .results .btn.big {
+    font-size: 24px;
+    padding: 10px 14px 8px;
+  }
+  .pause-box {
+    gap: 8px;
+  }
+  .pause-box .btn.big {
+    font-size: 24px;
+    padding: 10px 14px 8px;
+  }
 }

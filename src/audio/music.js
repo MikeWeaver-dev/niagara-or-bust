@@ -334,7 +334,11 @@ class MusicPlayer {
       try {
         this.song.play(this.step, this.bar, this.next, s, this.intensity);
       } catch (e) {
-        /* never let a bad note crash the game */
+        // never let a bad note crash the game, but say so once
+        if (!this.warned) {
+          this.warned = true;
+          console.warn('music error', this.name, e);
+        }
       }
       this.next += s;
       this.step++;

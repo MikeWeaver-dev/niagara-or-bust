@@ -934,7 +934,7 @@ export class River {
   // ------------------------------------------------------------ camera / audio
   scale() {
     const { W, H } = this.g;
-    return clamp(Math.min(W / 11, H / 12.5), 24, 72) * this.cam.zoom;
+    return clamp(Math.min(W / 11, H / 14), 24, 66) * this.cam.zoom;
   }
   updateCamera(dt) {
     const p = this.p;
@@ -945,8 +945,10 @@ export class River {
     if (halfView >= span) tx = 0;
     else tx = clamp(tx, -span + halfView, span - halfView);
     this.cam.x = approach(this.cam.x, tx, 4, dt);
-    const lead = this.mode === 'river' ? clamp(p.vd * 0.35, -3, 4) : 0;
-    const td = (this.mode === 'bank' && !this.salmon ? p.d + 2.5 : p.d + 2) + lead;
+    // keep the player around 70-75% down the screen, leaning the view ahead a little when fast
+    const H = this.g.H;
+    const lead = this.mode === 'river' ? clamp(p.vd * 0.3, -2, 3) : 0;
+    const td = this.mode === 'bank' && !this.salmon ? p.d + 2.5 : p.d + clamp(0.5 + lead, -1, (0.04 * H) / S);
     this.cam.d = approach(this.cam.d, td, 5, dt);
   }
   updateAudio() {
@@ -971,7 +973,7 @@ export class River {
     const S = this.scale();
     const camX = this.cam.x;
     const camD = this.cam.d;
-    const anchorY = H * (this.mode === 'bank' && !this.salmon ? 0.62 : 0.68);
+    const anchorY = H * (this.mode === 'bank' && !this.salmon ? 0.62 : 0.72);
     const sx = (x) => W / 2 + (x - camX) * S;
     const sy = (d, z = 0) => anchorY - (d - camD) * S - z * S * 0.9;
     const dMin = camD - (H - anchorY) / S - 2;
