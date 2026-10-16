@@ -1,0 +1,25 @@
+{
+  "name": "niagara-or-bust",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host --port 5173 --strictPort",
+    "play": "vite build && vite preview --host --port 5173 --strictPort",
+    "copy:kt": "node scripts/copy-to-kt.mjs"
+  },
+  "dependencies": {
+    "@fontsource/luckiest-guy": "^5.3.0",
+    "@fontsource/nunito": "^5.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  },
+  "description": "Niagara or Bust! A browser game about surviving a trip over the Horseshoe Falls."
+}
