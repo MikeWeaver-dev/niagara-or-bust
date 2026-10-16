@@ -92,6 +92,8 @@ export const DEATH = {
   bobby: [['NOT AGAIN, BOBBY', 'Somewhere, an orange peel is laughing.']],
   bear: [
     ['EATEN BY A BEAR', 'Swam upstream. Found a bear. Circle of life.'],
+    ['DISEMBOWELED BY A GRIZZLY', 'Nature documentary narrators everywhere just went silent.'],
+    ['NATURE IS METAL', 'The bear ate you in three bites and burped up your head.'],
     ['BECAME SUSHI', 'Bear-style. Very fresh.'],
     ['BEAR SNACK', 'The bear rated you 4/5 (a bit bony).'],
     ['THE BEAR ALWAYS WINS', 'You can fight the current. You cannot fight a bear.'],
@@ -122,7 +124,15 @@ export const SURVIVE_BY = {
   canoe: [['YOU AND GARY LIVED!', 'Gary would like to be dropped off now.']],
 };
 
-export function deathMessage({ cause, character, craft, wrecked }) {
+export const DIARRHEA = [
+  ['EXPLOSIVE DIARRHEA', 'The falls scared it right out of you. All of it.'],
+  ['EXPLOSIVE DIARRHEA', 'That was not blood. Niagara Parks is closing the beach.'],
+  ['EXPLOSIVE DIARRHEA', 'You went over the falls. Then the falls went over you.'],
+  ['EXPLOSIVE DIARRHEA', 'Should NOT have had that last hot dog.'],
+];
+
+export function deathMessage({ cause, character, craft, wrecked, poop }) {
+  if (poop) return pick(DIARRHEA);
   if (cause === 'bear') return pick(DEATH.bear);
   if (character === 'timmy') return pick(DEATH.timmy);
   const roll = Math.random();

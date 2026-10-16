@@ -491,6 +491,54 @@ class AudioEngine {
     this.tone({ type: 'sine', f: 90, f2: 30, t, dur: 0.5, gain: 0.55 });
     this.noise({ t, dur: 0.5, type: 'lowpass', f: 2000, f2: 200, gain: 0.4 });
   }
+  fart(len = 1.6) {
+    // the brownest note
+    if (!this.ctx) return;
+    const t = this.now;
+    const c = this.ctx;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95, t);
+    const steps = 14;
+    for (let i = 1; i <= steps; i++) o.frequency.linearRampToValueAtTime(70 + Math.random() * 60, t + (i / steps) * len);
+    const lfo = c.createOscillator();
+    const lg = c.createGain();
+    lfo.frequency.value = 28;
+    lg.gain.value = 30;
+    lfo.connect(lg).connect(o.frequency);
+    const fl = c.createBiquadFilter();
+    fl.type = 'lowpass';
+    fl.frequency.value = 520;
+    fl.Q.value = 6;
+    const g = c.createGain();
+    this.env(g, t, 0.45, 0.02, len * 0.7, len * 0.3);
+    o.connect(fl).connect(g).connect(this.sfx);
+    o.start(t);
+    lfo.start(t);
+    o.stop(t + len + 0.1);
+    lfo.stop(t + len + 0.1);
+    for (let i = 0; i < 10; i++) this.noise({ t: t + Math.random() * len, dur: 0.08, type: 'bandpass', f: 300 + Math.random() * 300, q: 3, gain: 0.25 });
+    this.splat(1.2);
+  }
+  barf(voice = 1) {
+    const t = this.now;
+    this.voice({ t, f: 180 * voice, f2: 120 * voice, dur: 0.35, gain: 0.25, formants: [600, 1000], vib: 20, vibRate: 11 });
+    this.voice({ t: t + 0.32, f: 150 * voice, f2: 90 * voice, dur: 0.9, gain: 0.3, formants: [500, 900], vib: 35, vibRate: 14 });
+    this.noise({ t: t + 0.35, dur: 0.9, type: 'bandpass', f: 700, f2: 300, q: 1.5, gain: 0.35 });
+    for (let i = 0; i < 6; i++) this.noise({ t: t + 0.5 + i * 0.12, dur: 0.06, type: 'lowpass', f: 600, gain: 0.25 });
+  }
+  burp() {
+    this.voice({ f: 90, f2: 70, dur: 0.7, gain: 0.35, formants: [400, 750], vib: 18, vibRate: 22 });
+  }
+  gulp() {
+    this.tone({ type: 'sine', f: 260, f2: 90, dur: 0.25, gain: 0.35 });
+    this.noise({ t: this.now + 0.05, dur: 0.15, type: 'lowpass', f: 400, gain: 0.25 });
+  }
+  rip() {
+    const t = this.now;
+    for (let i = 0; i < 8; i++) this.noise({ t: t + i * 0.025, dur: 0.05, type: 'bandpass', f: 1200 + Math.random() * 1500, q: 2, gain: 0.25 });
+    this.squish();
+  }
   thud() {
     this.tone({ type: 'sine', f: 120, f2: 45, dur: 0.18, gain: 0.35 });
   }

@@ -2,7 +2,7 @@
 // the survival roll, and the (very) messy aftermath.
 import { audio } from '../audio/audio.js';
 import { music } from '../audio/music.js';
-import { FX } from './fx.js';
+import { FX, Splatter, goreOf } from './fx.js';
 import { Physics, makeBox, makeBall, attach } from './physics.js';
 import { buildHuman, buildGiraffe, breakBone, drawRagdoll, corePoint, poseRagdoll, LIMB_BONES, HEAD_BONE, SPINE_BONE } from './ragdoll.js';
 import { drawCraftSide, drawParachute, drawGooseSide } from './vesselArt.js';
@@ -40,6 +40,9 @@ export class Drop {
     this.orbs = [];
     this.flags = {};
     this.goreStyle = settings.gore === 'off' || character.gore === 'cartoon' ? 'cartoon' : character.gore;
+    // every now and then (or always, with the cheat) the blood is... not blood
+    this.poop = this.goreStyle !== 'cartoon' && (cheats.diarrhea || Math.random() < 0.07);
+    this.splat = new Splatter();
 
     const P = new Physics();
     P.gravity = cheats.moon ? 8 : 22;
@@ -81,6 +84,7 @@ export class Drop {
     const opts = { bigHead: this.cheats.bigHead, tiny: this.cheats.tiny, noodle: this.cheats.noodle, lifejacket: this.craftId === 'lifejacket', ...extra };
     const rag = ch.kind === 'giraffe' ? buildGiraffe(this.phys, ch, x, y, pose === 'sit' || pose === 'ride' || pose === 'crouch' ? 'sit' : 'stand', opts) : buildHuman(this.phys, ch, x, y, pose, opts);
     rag.goreStyle = ch.id === 'gary' ? (this.settings.gore === 'off' ? 'cartoon' : 'blood') : this.goreStyle;
+    if (this.poop && rag.goreStyle !== 'cartoon') rag.goreStyle = 'poop';
     rag.expr = 'scared';
     return rag;
   }
@@ -322,11 +326,11 @@ export class Drop {
     const blood = p.kind === 'blood' || p.kind === 'glitter';
     if (p.y > POOL_Y) {
       if (blood) {
-        if (Math.random() < 0.35) this.fx.cloud(p.x, POOL_Y + rand(0.2, 1.2), p.kind === 'glitter' ? 'rgba(255,90,214,0.35)' : 'rgba(170,0,25,0.4)', 1.2);
+        if (Math.random() < 0.35) this.fx.cloud(p.x, POOL_Y + rand(0.2, 1.2), goreOf(p.style).cloud, 1.2);
         return false;
       }
       if (p.kind === 'drop' || p.kind === 'confetti' || p.kind === 'spark') return false;
-      if (p.kind !== 'cloud' && p.kind !== 'bubble' && p.kind !== 'smoke' && p.kind !== 'fire' && p.kind !== 'foam') {
+      if (p.kind !== 'cloud' && p.kind !== 'bubble' && p.kind !== 'smoke' && p.kind !== 'fire' && p.kind !== 'foam' && p.kind !== 'mist' && p.kind !== 'stink') {
         // floating junk
         p.y = POOL_Y - 0.05;
         p.vy = 0;
@@ -339,7 +343,7 @@ export class Drop {
       for (const r of this.rocks) {
         if (r.hidden) continue;
         if (Math.hypot(p.x - r.x, p.y - r.y) < r.r * 0.95) {
-          if (r.decals.length < 30) r.decals.push({ x: p.x - r.x, y: p.y - r.y, r: rand(0.06, 0.2), a: rand(0, TAU), c: p.kind === 'glitter' ? pick(RAINBOW) : pick(['rgba(160,0,20,0.9)', 'rgba(200,0,30,0.85)', 'rgba(120,0,10,0.9)']) });
+          if (r.decals.length < 40) r.decals.push({ x: p.x - r.x, y: p.y - r.y, r: rand(0.06, 0.22), a: rand(0, TAU), c: p.kind === 'glitter' ? pick(RAINBOW) : pick(goreOf(p.style).decal), drip: Math.random() < 0.4 ? rand(0.2, 0.7) : 0 });
           return false;
         }
       }
@@ -393,7 +397,7 @@ export class Drop {
       else if (this.mini.chute && this.mini.chute.deployed) cause = 'chute';
       else if (this.info.ko) cause = 'unconscious';
       else if (Math.random() < rockChance) cause = 'rocks';
-      else cause = Math.random() < 0.72 || this.cheats.goreGalore ? 'water' : 'drown';
+      else cause = Math.random() < 0.85 || this.cheats.goreGalore || this.poop ? 'water' : 'drown';
       if (cause === 'rocks' || (cause === 'unconscious' && Math.random() < 0.5) || (cause === 'explode' && Math.random() < 0.5)) {
         if (!this.rocks.some((r) => near(r) && !r.hidden)) {
           this.rocks.push(art.makeRock(land.x, POOL_Y - 0.9, 1.7, Math.floor(Math.random() * 9999)));
@@ -482,11 +486,21 @@ export class Drop {
       if (cause === 'drown') this.sinkT = 2;
       return;
     }
+    const gStyle = rag.goreStyle;
+    const core = corePoint(rag);
     if (cause === 'drown') {
+      // drowned, but the falls still did a number on you
       this.sinkT = 2.5;
       audio.glub();
       this.fx.bubbles(this.impact.x, POOL_Y + 0.5, 14);
+      this.fx.blood(core.x, core.y, 0, -1, 0.8, gStyle);
+      this.breakQueue.push({ rag, name: pick(LIMB_BONES[rag.kind]), at: 0.1 });
       return;
+    }
+    if (this.poop) {
+      audio.fart();
+      this.fx.text('EXPLOSIVE DIARRHEA', core.x, core.y - 2.5, '#c8a050', 34, 0, 2.6);
+      this.fx.stink(core.x, core.y, 10);
     }
     // GORE: decide which bones go
     const kindKey = rag.kind;
@@ -497,28 +511,35 @@ export class Drop {
     if (gore === 'galore' || cause === 'explode') {
       nLimbs = limbs.length;
       headChance = 1;
-      spineChance = 0.8;
+      spineChance = 0.85;
     } else if (gore === 'max') {
       nLimbs = Math.floor(rand(4, 7));
-      headChance = 0.65;
-      spineChance = 0.3;
+      headChance = 0.7;
+      spineChance = 0.35;
     } else {
-      nLimbs = Math.floor(rand(1, 4));
-      headChance = 0.3;
-      spineChance = 0.05;
+      nLimbs = Math.floor(rand(2, 4));
+      headChance = 0.35;
+      spineChance = 0.08;
     }
-    if (kind === 'water' && cause !== 'explode') nLimbs = Math.max(1, Math.floor(nLimbs * 0.6));
+    if (kind === 'water' && cause !== 'explode') nLimbs = Math.max(2, Math.floor(nLimbs * 0.75));
     const queue = limbs.slice(0, nLimbs);
     if (Math.random() < headChance) queue.splice(Math.floor(Math.random() * 2), 0, HEAD_BONE[kindKey]);
-    if (Math.random() < spineChance) queue.push(SPINE_BONE[kindKey]);
+    const spine = Math.random() < spineChance;
+    if (spine) queue.push(SPINE_BONE[kindKey]);
     queue.forEach((name, i) => this.breakQueue.push({ rag, name, at: i * 0.07 + rand(0, 0.05) }));
     if (this.gary) {
-      [...LIMB_BONES.human].sort(() => Math.random() - 0.5).slice(0, Math.max(1, Math.floor(nLimbs * 0.7))).forEach((name, i) => this.breakQueue.push({ rag: this.gary, name, at: 0.1 + i * 0.08 }));
+      [...LIMB_BONES.human].sort(() => Math.random() - 0.5).slice(0, Math.max(2, Math.floor(nLimbs * 0.7))).forEach((name, i) => this.breakQueue.push({ rag: this.gary, name, at: 0.1 + i * 0.08 }));
       if (Math.random() < headChance) this.breakQueue.push({ rag: this.gary, name: 'neck', at: 0.05 });
     }
-    const core = corePoint(rag);
-    this.fx.blood(core.x, core.y, 0, -1, 2.2, style);
-    this.fx.gibs(core.x, core.y, gore === 'on' ? 0.5 : 1.3, style);
+    this.fx.blood(core.x, core.y, 0, -1, 2.6, gStyle);
+    this.fx.blood(core.x, core.y, 1, -0.4, 1.4, gStyle);
+    this.fx.gibs(core.x, core.y, gore === 'on' ? 0.7 : 1.5, gStyle);
+    if (spine || gore === 'galore' || (gore === 'max' && Math.random() < 0.5)) {
+      this.fx.guts(core.x, core.y, gore === 'galore' ? 6 : 3, gStyle);
+      this.gutsSpilled = true;
+    }
+    if (gore !== 'on') this.splat.add(gore === 'galore' ? 10 : 4 + Math.floor(Math.random() * 4), gStyle, 1.2);
+    else this.splat.add(2, gStyle, 0.8);
     if (gore === 'galore') this.bloodRain = 3.5;
   }
 
@@ -579,8 +600,8 @@ export class Drop {
       const d = Math.hypot(away.x, away.y) || 1;
       this.phys.impulse(s.b, (away.x / d) * rand(4, 9) + rand(-3, 3), (away.y / d) * rand(3, 8) - rand(4, 9), 1 / 120);
       this.fx.blood(s.a.x, s.a.y, away.x, away.y, 0.9, style);
-      this.emitters.push({ p: s.a, from: s.b, t: rand(1.5, 3), style });
-      this.emitters.push({ p: s.b, from: s.a, t: rand(1.2, 2.4), style });
+      this.emitters.push({ p: s.a, from: s.b, t: rand(2, 3.5), style, phase: rand(0, TAU) });
+      this.emitters.push({ p: s.b, from: s.a, t: rand(1.5, 2.6), style, phase: rand(0, TAU) });
       if (b.name === HEAD_BONE[b.rag.kind]) this.fx.text(b.rag === this.gary ? 'GARY, NO!' : 'HEADS UP!', s.b.x, s.b.y - 1, '#ff5a5a', 26, 0, 1.4);
     }
   }
@@ -593,7 +614,9 @@ export class Drop {
         this.emitters.splice(i, 1);
         continue;
       }
-      const n = Math.random() < Math.min(1, e.t) ? 2 : 1;
+      // arterial spurts pulse with the (rapidly fading) heartbeat
+      const pulse = 0.5 + 0.5 * Math.sin(this.t * 9 + (e.phase || 0));
+      const n = Math.random() < Math.min(1, e.t) * pulse ? 3 : pulse > 0.6 ? 1 : 0;
       for (let k = 0; k < n; k++) {
         const dx = e.p.x - e.from.x;
         const dy = e.p.y - e.from.y;
@@ -601,10 +624,10 @@ export class Drop {
         const vx = (e.p.x - e.p.px) * 120;
         const vy = (e.p.y - e.p.py) * 120;
         if (e.p.y > POOL_Y) {
-          if (Math.random() < 0.15) this.fx.cloud(e.p.x, e.p.y, e.style === 'rainbow' ? 'rgba(255,90,214,0.3)' : 'rgba(170,0,25,0.35)', 0.8);
+          if (Math.random() < 0.15) this.fx.cloud(e.p.x, e.p.y, goreOf(e.style).cloud, 0.8);
         } else {
-          const sp = rand(2, 6) * Math.min(1, e.t);
-          this.fx.add({ x: e.p.x, y: e.p.y, vx: vx * 0.5 + (dx / d) * sp + rand(-1, 1), vy: vy * 0.5 + (dy / d) * sp - rand(0, 2), life: rand(0.6, 1.2), size: rand(0.04, 0.09), color: e.style === 'rainbow' ? pick(RAINBOW) : pick(['#c4001d', '#e0062a', '#9e0016']), kind: e.style === 'rainbow' ? 'glitter' : 'blood', drag: 0.2 });
+          const sp = rand(3, 9) * Math.min(1, e.t) * (0.6 + pulse * 0.8);
+          this.fx.add({ x: e.p.x, y: e.p.y, vx: vx * 0.5 + (dx / d) * sp + rand(-1, 1), vy: vy * 0.5 + (dy / d) * sp - rand(0, 2), life: rand(0.6, 1.2), size: rand(0.035, 0.08), color: pick(goreOf(e.style).drops), kind: e.style === 'rainbow' ? 'glitter' : 'blood', drag: 0.2, style: e.style });
         }
       }
     }
@@ -627,9 +650,10 @@ export class Drop {
     if (this.sinkT > 0) this.sinkT -= dt;
     if (this.bloodRain > 0) {
       this.bloodRain -= dt;
-      for (let i = 0; i < 4; i++) this.fx.add({ x: this.cam.x + rand(-8, 8), y: this.cam.y - 9, vx: rand(-1, 1), vy: rand(4, 8), life: 2, size: rand(0.05, 0.12), color: pick(['#c4001d', '#e0062a']), kind: 'blood', drag: 0.1 });
+      for (let i = 0; i < 4; i++) this.fx.add({ x: this.cam.x + rand(-8, 8), y: this.cam.y - 9, vx: rand(-1, 1), vy: rand(4, 8), life: 2, size: rand(0.05, 0.12), color: pick(goreOf(this.rider.goreStyle).drops), kind: 'blood', drag: 0.1, style: this.rider.goreStyle });
     }
     this.fx.update(dt);
+    this.splat.update(dt);
     this.updateCamera(dt);
   }
 
@@ -776,7 +800,7 @@ export class Drop {
           this.g.setTimeScale(0.6, 2.4);
         }
         if (mode === 'chute') this.mini.chute = { deployed: false, open: 0, canopy: null, torn: false, snagged: false, zone: null };
-        if (mode === 'glide') this.spawnSkyOrbs();
+
       }
       return;
     }
@@ -1020,6 +1044,7 @@ export class Drop {
       limbs,
       decapitated: this.rider.decapitated,
       wrecked: info.wrecked,
+      poop: this.poop && !O.survived && this.goreStyle !== 'cartoon',
     });
   }
 
@@ -1117,6 +1142,7 @@ export class Drop {
     ctx.restore();
 
     this.fx.renderTexts(ctx, proj);
+    this.splat.render(ctx, W, H);
     this.drawOverlay(ctx, proj);
   }
 
@@ -1413,8 +1439,8 @@ export class Drop {
       this.g.input.setButtons([btn]);
       drawButton(ctx, btn, { color: '#2bb673', pulse: Math.sin(t * 8) });
     } else if (mode === 'glide' && this.stage === 'fall') {
-      bigText(ctx, touch ? 'HOLD RIGHT SIDE TO FLAP · DRAG TO STEER' : 'SPACE / ▲ FLAP · ◀ ▶ STEER', W / 2, H * 0.2, Math.min(20, W * 0.042), '#ffd23b');
-      bigText(ctx, 'GRAB THE GOLDEN LUMENS!', W / 2, H * 0.2 + 26, 15, '#fff');
+      bigText(ctx, touch ? 'HOLD FLAP TO FLOAT · DRAG TO STEER' : 'SPACE / ▲ FLAP · ◀ ▶ STEER', W / 2, H * 0.2, Math.min(20, W * 0.042), '#ffd23b');
+      bigText(ctx, 'THE GOOSE HAS YOU. RELAX.', W / 2, H * 0.2 + 26, 15, '#fff');
       if (touch) {
         const btn = { id: 'flap', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'FLAP!', action: 'primary' };
         this.g.input.setButtons([btn]);

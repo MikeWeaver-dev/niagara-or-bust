@@ -2,7 +2,7 @@
 // Also hosts Salmon Mode (swim upstream until a bear eats you).
 import { audio } from '../audio/audio.js';
 import { music } from '../audio/music.js';
-import { FX } from './fx.js';
+import { FX, Splatter, goreOf } from './fx.js';
 import { clamp, lerp, rand, rng, pick, approach, segDist, bigText, TAU, easeOutBack } from './util.js';
 import { RW, RIVER_LEN, brinkAt, laneOf, LANE_NAME, LANE_BONUS, LANE_TIP, computeOdds, oddsColor } from './odds.js';
 import * as art from './riverArt.js';
@@ -28,6 +28,7 @@ export class River {
     this.ch = character;
     this.fx = new FX('top');
     this.fx.onLand = (p) => this.onParticleLand(p);
+    this.splat = new Splatter();
     this.obs = [];
     this.props = [];
     this.rapids = [];
@@ -196,7 +197,7 @@ export class River {
   onParticleLand(p) {
     if (p.kind === 'blood' || p.kind === 'glitter') {
       if (Math.abs(p.x) < RW && Math.random() < 0.3) {
-        this.fx.cloud(p.x, p.y, p.kind === 'glitter' ? 'rgba(255,90,214,0.3)' : 'rgba(180,0,25,0.32)', 0.5);
+        this.fx.cloud(p.x, p.y, p.kind === 'glitter' && !p.style ? 'rgba(255,90,214,0.3)' : goreOf(p.style).cloud, 0.5);
       }
       return false;
     }
@@ -289,6 +290,7 @@ export class River {
     this.trail.forEach((tr) => (tr.life -= dt * 1.4));
 
     this.fx.update(dt);
+    this.splat.update(dt);
     this.updateCamera(dt);
     this.updateAudio();
   }
@@ -406,6 +408,18 @@ export class River {
     p.hitT = Math.max(0, p.hitT - dt);
     p.spin = Math.max(0, p.spin - dt * 0.6);
     p.pooped = Math.max(0, p.pooped - dt);
+    // knocked out? you come to after 5 seconds
+    if (p.ko) {
+      p.koT = (p.koT || 0) + dt;
+      if (p.koT >= 5) {
+        p.ko = false;
+        p.koT = 0;
+        p.hp = p.maxHp * 0.35;
+        p.invuln = 1.5;
+        audio.whoa(this.voice());
+        this.say('WOKE UP!', '#5dff8a', 28);
+      }
+    }
 
     // ability
     if (inp.pressed('primary') && p.cd <= 0 && !p.ko && !(p.wrecked && abilityId !== 'panic')) this.activate(abilityId, inp);
@@ -506,6 +520,17 @@ export class River {
     }
 
     this.collide(dt, turbo);
+
+    // anti-stuck: if something pins you in place, the river shoves you around it
+    if (!this.salmon && p.vd < 0.9) {
+      p.stuckT = (p.stuckT || 0) + dt;
+      if (p.stuckT > 1) {
+        p.stuckT = 0;
+        p.vx += (p.x > 0 ? -1 : 1) * 7;
+        p.d += 0.4;
+        p.vd = Math.max(p.vd, 2);
+      }
+    } else p.stuckT = 0;
 
     if (this.salmon) this.updateSalmon(dt);
     else if (p.d >= brinkAt(p.x) - 0.4) this.startBrink();
@@ -770,6 +795,7 @@ export class River {
       if (C.id === 'canoe') this.fx.text('GARY SWIMS AWAY', p.x + 2, p.d + 1.5, '#9ef', 16, 1, 2);
     } else if (!p.ko) {
       p.ko = true;
+      p.koT = 0;
       p.hp = 0;
       audio.bonk();
       audio.glub();
@@ -839,37 +865,122 @@ export class River {
   startBearFinale(x, d) {
     this.setMode('bear');
     this.swipes = [];
-    this.bigBear = { x, d, rise: 0, mouth: 0, chomped: false };
+    this.bigBear = { x, d, rise: 0, mouth: 0, shake: 0, bites: 0, bloody: 0 };
     audio.roar();
     music.stop();
     this.g.shake(1.2);
     this.say('THE BEAR ALWAYS WINS', '#ff5a5a', 30);
   }
 
+  // The most disgusting nature documentary ever made.
   updateBear(dt) {
     const p = this.p;
     const B = this.bigBear;
+    const T = this.modeT;
+    const cartoon = this.g.cfg.settings.gore === 'off';
+    const style = cartoon ? 'cartoon' : 'fish';
+    const mouthX = B.x;
+    const mouthD = B.d - 0.9;
     B.rise = Math.min(1, B.rise + dt * 1.4);
-    B.mouth = clamp((this.modeT - 0.5) * 1.5, 0, 1);
-    if (this.modeT > 0.6 && !B.chomped) {
-      p.x = approach(p.x, B.x, 4, dt);
-      p.d = approach(p.d, B.d - 0.6, 4, dt);
-      p.z = approach(p.z, 1.6, 3, dt);
-      p.rot += dt * 8;
+    if (T < 1.2) {
+      B.mouth = clamp((T - 0.4) * 1.6, 0, 1);
+      if (T > 0.5) {
+        p.x = approach(p.x, mouthX, 4, dt);
+        p.d = approach(p.d, mouthD, 4, dt);
+        p.z = approach(p.z, 1.6, 3, dt);
+        p.rot += dt * 8;
+      }
+      return;
     }
-    if (this.modeT > 1.5 && !B.chomped) {
-      B.chomped = true;
-      B.mouth = 0;
+    if (B.bites === 0) {
+      // CHOMP: bitten clean in half
+      B.bites = 1;
+      B.bloody = 1;
+      this.held = true;
+      this.fishHalf = { x: p.x, d: p.d, z: 1.8, vx: rand(-5, 5), vd: rand(2, 5), vz: 9, rot: 0, vr: rand(-12, 12) };
       audio.chomp();
-      this.g.shake(1.4);
-      const style = this.g.cfg.settings.gore === 'off' ? 'cartoon' : 'blood';
-      this.fx.blood(p.x, p.d, 0, 1, 1.6, style, 1.5);
-      this.fx.gibs(p.x, p.d, 0.5, style, 1.5);
-      for (let i = 0; i < 4; i++) this.fx.add({ x: p.x, y: p.d, z: 1.5, vx: rand(-4, 4), vy: rand(-2, 2), vz: rand(4, 9), life: 3, size: 0.18, color: '#fff', kind: 'fishbone', drag: 0.2 });
-      this.fx.text('CHOMP!', p.x, p.d + 2, '#ff5a5a', 40, 2, 2);
+      audio.rip();
+      audio.splat(1.4);
+      audio.crack();
+      this.g.shake(2);
+      this.fx.text('RIIIIIP!', p.x, p.d + 1, '#ff3b3b', 44, 2.5, 1.6);
+      if (!cartoon) {
+        this.fx.blood(p.x, p.d, 0, 1, 3.4, style, 1.6);
+        this.fx.blood(p.x, p.d, 1, 0, 2.0, style, 1.6);
+        this.fx.gibs(p.x, p.d, 2.6, style, 1.6);
+        this.fx.guts(p.x, p.d, 6, style, 1.6);
+        this.fx.roe(p.x, p.d, 50, 1.6);
+        this.fx.scales(p.x, p.d, 60, 1.6);
+        this.splat.add(9, 'blood', 1.5);
+      } else {
+        this.fx.stars(p.x, p.d, 8, 1.6);
+      }
     }
-    if (B.chomped) B.mouth = Math.max(0, Math.sin((this.modeT - 1.5) * 10) * 0.4);
-    if (this.modeT > 3.4 && !this.flags.finished) {
+    // the tail half cartwheels away spraying everywhere
+    const H = this.fishHalf;
+    if (H) {
+      H.vz -= 24 * dt;
+      H.x += H.vx * dt;
+      H.d += H.vd * dt;
+      H.z = Math.max(0, H.z + H.vz * dt);
+      H.rot += H.vr * dt;
+      if (H.z <= 0 && !H.landed) {
+        H.landed = true;
+        this.fx.splash(H.x, H.d, 0.6);
+        audio.splash(0.5);
+      }
+      if (!cartoon && !H.landed && Math.random() < 0.7) this.fx.blood(H.x, H.d, 0, 0, 0.25, style, H.z);
+    }
+    // chew, shake, chew
+    if (T < 3.4) {
+      B.mouth = 0.25 + Math.abs(Math.sin(T * 9)) * 0.55;
+      B.shake = Math.sin(T * 17) * 0.22;
+      this.chewT = (this.chewT || 0) - dt;
+      if (this.chewT <= 0) {
+        this.chewT = rand(0.22, 0.4);
+        audio.squish();
+        if (Math.random() < 0.5) audio.crack();
+        this.g.shake(0.6);
+        if (!cartoon) {
+          this.fx.blood(mouthX + rand(-0.6, 0.6), mouthD, rand(-1, 1), -0.5, 1.1, style, 1.4);
+          this.fx.gibs(mouthX, mouthD, 0.6, style, 1.4);
+          if (Math.random() < 0.4) this.fx.guts(mouthX, mouthD, 1, style, 1.4);
+          if (Math.random() < 0.5) this.fx.roe(mouthX, mouthD, 12, 1.4);
+          if (Math.random() < 0.35) this.splat.add(1, 'blood', 1);
+        }
+      }
+      // blood drools from the corners of its mouth
+      if (!cartoon && Math.random() < 0.8) {
+        this.fx.add({ x: mouthX + (Math.random() < 0.5 ? -0.55 : 0.55), y: mouthD - 0.1, z: 1.2, vx: rand(-0.3, 0.3), vy: rand(-0.5, 0.2), vz: -0.5, life: 1, size: rand(0.05, 0.09), color: pick(goreOf('blood').drops), kind: 'blood', drag: 0.4, style: 'blood' });
+      }
+      if (!this.flags.vomitStarted && T > 1.7) {
+        this.flags.vomitStarted = true;
+        this.startTouristVomit();
+      }
+    } else if (!this.flags.gulp) {
+      this.flags.gulp = true;
+      this.held = false;
+      B.mouth = 0;
+      B.shake = 0;
+      audio.gulp();
+      this.fx.text('GULP.', mouthX, mouthD + 1, '#fff', 30, 2.5, 1.2);
+    }
+    if (T > 3.9 && !this.flags.burp) {
+      this.flags.burp = true;
+      B.mouth = 0.6;
+      audio.burp();
+      this.fx.text('*BURP*', mouthX, mouthD + 1, '#ffd23b', 30, 2.5, 1.4);
+      this.fx.add({ x: mouthX, y: mouthD, z: 1.5, vx: rand(-3, 3), vy: -2, vz: 7, life: 3, size: 0.12, color: '#fff', kind: 'eye', drag: 0.2 });
+      for (let i = 0; i < 5; i++) this.fx.add({ x: mouthX, y: mouthD, z: 1.5, vx: rand(-4, 4), vy: rand(-3, 1), vz: rand(4, 8), life: 3, size: 0.16, color: '#fff', kind: 'fishbone', drag: 0.2 });
+    }
+    if (T > 4.1 && B.mouth > 0) B.mouth = Math.max(0, B.mouth - dt * 2);
+    if (T > 4.3 && !this.flags.viewerBarf && !cartoon) {
+      this.flags.viewerBarf = true;
+      this.splat.vomit();
+      audio.barf(1.1);
+    }
+    this.updateTouristVomit(dt);
+    if (T > (cartoon ? 4.4 : 6.6) && !this.flags.finished) {
       this.flags.finished = true;
       const lumens = 3 + Math.floor(this.run.upstream / 8) + this.run.lumens;
       audio.sadTrombone();
@@ -877,12 +988,13 @@ export class River {
         survived: false,
         cause: 'bear',
         odds: 0,
-        lumensBase: lumens,
+        lumensBase: lumens + (cartoon ? 0 : 5),
         breakdown: [
           ['Swam upstream', Math.floor(this.run.upstream / 8)],
           ['Lumens collected', this.run.lumens - this.run.dodges * 3],
           ['Bear dodges', this.run.dodges * 3],
           ['Participation', 3],
+          ...(cartoon ? [] : [['Disgusting bonus', 5]]),
         ],
         limbs: 0,
         salmon: true,
@@ -890,6 +1002,33 @@ export class River {
     }
   }
 
+  // nearby tourists lose their lunch
+  startTouristVomit() {
+    const v = this.view;
+    const near = this.props.filter((pr) => pr.type === 'tourist' && v && pr.d > v.dMin && pr.d < v.dMax).slice(0, 4);
+    near.forEach((pr, i) => {
+      pr.vomit = { t: -i * 0.35, done: false };
+    });
+    if (!near.length) audio.barf(1.3);
+  }
+
+  updateTouristVomit(dt) {
+    this.props.forEach((pr) => {
+      if (!pr.vomit) return;
+      const V = pr.vomit;
+      V.t += dt;
+      if (V.t < 0) return;
+      if (!V.said) {
+        V.said = true;
+        audio.barf(0.8 + Math.random() * 0.6);
+        this.fx.text(pick(['BLEHHH!', 'HUURK!', 'OH NO-', 'BLARGH!']), pr.x, pr.d, '#c8e060', 22, 2.4, 1.4);
+      }
+      if (V.t < 1.4) {
+        const dir = pr.x < 0 ? 1 : -1;
+        this.fx.vomit(pr.x + dir * 0.2, pr.d, dir, -0.2, 3, 1.3);
+      }
+    });
+  }
   // ------------------------------------------------------------ brink
   startBrink() {
     const p = this.p;
@@ -1078,9 +1217,26 @@ export class River {
       const B = this.bigBear;
       ctx.save();
       ctx.translate(sx(B.x), sy(B.d) + (1 - B.rise) * S * 4);
-      drawBear(ctx, S, this.t, { mouth: B.mouth, scale: 2.4 * easeOutBack(B.rise) });
+      ctx.rotate(B.shake || 0);
+      drawBear(ctx, S, this.t, { mouth: B.mouth, scale: 2.4 * easeOutBack(B.rise), bloody: B.bloody });
+      if (this.held) {
+        // the front half of you, still in its jaws
+        ctx.save();
+        ctx.translate(0, -S * 2.0);
+        ctx.rotate(Math.PI / 2 + Math.sin(this.t * 17) * 0.3);
+        drawSalmonTop(ctx, S * 1.3, this.t, { half: 'front' });
+        ctx.restore();
+      }
       ctx.restore();
-      if (this.mode === 'bear' && this.modeT > 0.6 && !B.chomped) this.drawPlayer(ctx, v);
+      if (this.mode === 'bear' && this.modeT > 0.6 && !B.bites) this.drawPlayer(ctx, v);
+      if (this.fishHalf) {
+        const H = this.fishHalf;
+        ctx.save();
+        ctx.translate(sx(H.x), sy(H.d, H.z));
+        ctx.rotate(H.rot);
+        drawSalmonTop(ctx, S * 1.1, this.t, { half: 'back' });
+        ctx.restore();
+      }
     }
     if (this.catJump) {
       const c = this.catJump;
@@ -1094,6 +1250,9 @@ export class River {
 
     this.fx.render(ctx, (x, y, z) => ({ x: sx(x), y: sy(y, z), s: S }), 'front');
     this.fx.renderTexts(ctx, (x, y, z) => ({ x: sx(x), y: sy(y, z + 2), s: S }));
+    if (this.p.ko && this.mode === 'river') {
+      bigText(ctx, `KO! ${Math.max(1, Math.ceil(5 - (this.p.koT || 0)))}`, sx(this.p.x), sy(this.p.d, 2.8), 26, '#ff5a5a');
+    }
 
     // mist + vignette near the brink
     if (!this.salmon) {
@@ -1246,6 +1405,14 @@ export class River {
     const { W, H } = this.g;
     const p = this.p;
     const t = this.t;
+    this.splat.render(ctx, W, H);
+    if (this.mode === 'bear' && this.bigBear && this.bigBear.bites && this.g.cfg.settings.gore !== 'off') {
+      const k = clamp((this.modeT - 1.2) / 3.1, 0, 1);
+      if (Math.sin(t * 8) > -0.3) bigText(ctx, 'VIEWER DISCRETION ADVISED', W / 2, 86, Math.min(26, W * 0.055), '#ff3b3b');
+      bigText(ctx, 'NATURE IS METAL', W / 2, 116, Math.min(18, W * 0.04), '#fff');
+      const bw = Math.min(W * 0.6, 300);
+      bar(ctx, W / 2 - bw / 2, H - 70, bw, 22, k, k < 0.6 ? '#c8e060' : '#8aa02a', k >= 1 ? 'BARF-O-METER: 100%' : `BARF-O-METER: ${Math.round(k * 100)}%`);
+    }
     const touch = this.g.showTouch;
     const btnR = clamp(Math.min(W, H) * 0.11, 38, 56);
     const btn = { id: 'main', x: W - btnR - 18, y: H - btnR - 24, r: btnR, action: 'primary' };

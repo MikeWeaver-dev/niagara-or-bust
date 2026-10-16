@@ -873,3 +873,43 @@ input[type='range'] {
     padding: 10px 14px 8px;
   }
 }
+
+/* ---------- GO button floating over the shop / cheats ---------- */
+.go-float {
+  position: fixed;
+  right: calc(16px + var(--safe-r));
+  bottom: calc(16px + var(--safe-b));
+  z-index: 20;
+}
+.go-btn {
+  font-size: 26px;
+  padding: 14px 22px 11px;
+  animation: gopulse 1.6s ease-in-out infinite;
+}
+@keyframes gopulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+.screen {
+  padding-bottom: calc(96px + var(--safe-b));
+}
+.corner-l {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.kt-note {
+  font-family: var(--head);
+  font-size: clamp(16px, 4.2vw, 24px);
+  color: #fff;
+  background: linear-gradient(180deg, #ff6fb5, #ff3d7f);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 7px 12px 4px;
+  box-shadow: 0 4px 0 var(--ink);
+  transform: rotate(-4deg);
+  text-shadow: 0 2px 0 var(--ink);
+  white-space: nowrap;
+  animation: wobble 2.4s ease-in-out infinite;
+}

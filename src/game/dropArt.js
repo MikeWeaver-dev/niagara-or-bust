@@ -377,6 +377,18 @@ export function drawRocks(ctx, rocks, lw) {
       ctx.beginPath();
       ctx.ellipse(r.x + d.x, r.y + d.y, d.r, d.r * 0.6, d.a, 0, TAU);
       ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r.x + d.x + Math.cos(d.a) * d.r * 1.4, r.y + d.y + Math.sin(d.a) * d.r * 1.1, d.r * 0.25, 0, TAU);
+      ctx.fill();
+      if (d.drip) {
+        // gravity pulls a run of blood down the rock face
+        ctx.beginPath();
+        ctx.moveTo(r.x + d.x - d.r * 0.15, r.y + d.y);
+        ctx.lineTo(r.x + d.x - d.r * 0.08, r.y + d.y + d.drip);
+        ctx.arc(r.x + d.x, r.y + d.y + d.drip, d.r * 0.1, Math.PI, 0, true);
+        ctx.lineTo(r.x + d.x + d.r * 0.15, r.y + d.y);
+        ctx.fill();
+      }
     });
   });
 }

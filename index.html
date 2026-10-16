@@ -13,9 +13,74 @@
     <meta name="description" content="Niagara or Bust! Survive a trip over the Horseshoe Falls in a barrel, kayak, hamster ball... or nothing at all." />
     <link rel="icon" type="image/svg+xml" href="/game/favicon.svg" />
     <title>Niagara or Bust!</title>
+    <style>
+      /* loading screen shown until the game boots (React replaces #root's contents) */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: radial-gradient(ellipse at 50% 30%, #2bb6ff 0%, #1b5fa0 45%, #0b2a4a 100%);
+        color: #fff;
+        font-family: 'Arial Black', Impact, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #boot .kt {
+        position: absolute;
+        top: calc(14px + env(safe-area-inset-top, 0px));
+        left: calc(14px + env(safe-area-inset-left, 0px));
+        background: linear-gradient(180deg, #ff6fb5, #ff3d7f);
+        border: 3px solid #1a1030;
+        border-radius: 14px;
+        padding: 8px 14px;
+        font-size: 20px;
+        transform: rotate(-4deg);
+        box-shadow: 0 4px 0 #1a1030;
+        text-shadow: 0 2px 0 #1a1030;
+      }
+      #boot .title {
+        font-size: clamp(36px, 10vw, 84px);
+        line-height: 0.95;
+        text-align: center;
+        color: #ffd23b;
+        text-shadow: 0 5px 0 #1a1030, 0 10px 24px rgba(0, 0, 0, 0.4);
+      }
+      #boot .title span {
+        display: block;
+        color: #8fe3ff;
+      }
+      #boot .barrel {
+        width: 46px;
+        height: 60px;
+        border-radius: 14px;
+        background: linear-gradient(90deg, #6b3a17, #b8732f, #6b3a17);
+        border: 4px solid #2a1408;
+        box-shadow: inset 0 14px 0 -9px #3d3d48, inset 0 -14px 0 -9px #3d3d48;
+        animation: tumble 1s linear infinite;
+      }
+      #boot .sub {
+        font-family: system-ui, sans-serif;
+        font-weight: 800;
+        opacity: 0.85;
+      }
+      @keyframes tumble {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot">
+        <div class="kt">Go Kids Table!!!</div>
+        <div class="title">NIAGARA<span>OR BUST!</span></div>
+        <div class="barrel"></div>
+        <div class="sub">Loading the falls...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

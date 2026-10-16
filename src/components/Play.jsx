@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import MenuBackground from './MenuBackground.jsx';
 import ItemCard from './ItemCard.jsx';
 import ItemPreview from './ItemPreview.jsx';
@@ -14,8 +14,14 @@ import { audio } from '../audio/audio.js';
 import { music } from '../audio/music.js';
 
 export default function Play() {
-  const [stage, setStage] = useState('loadout'); // loadout | game
+  const location = useLocation();
+  const nav = useNavigate();
+  // "GO!" from the shop / cheats jumps straight into a run with the current loadout
+  const [stage, setStage] = useState(() => (location.state && location.state.autostart && canStart(store.get()) ? 'game' : 'loadout')); // loadout | game
   const [runKey, setRunKey] = useState(0);
+  useEffect(() => {
+    if (location.state && location.state.autostart) nav('/play', { replace: true, state: null });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const start = () => {
     audio.click();
     setRunKey((k) => k + 1);
@@ -23,6 +29,12 @@ export default function Play() {
   };
   if (stage === 'game') return <GameView key={runKey} onLoadout={() => setStage('loadout')} onAgain={() => setRunKey((k) => k + 1)} />;
   return <Loadout onStart={start} />;
+}
+
+export function canStart(save) {
+  const chOk = isOwned('character', save.selected.character, save) || save.cheats.tryAll;
+  const crOk = isOwned('craft', save.selected.craft, save) || save.cheats.tryAll || save.cheats.salmon;
+  return chOk && crOk;
 }
 
 function Loadout({ onStart }) {
@@ -132,7 +144,7 @@ function GameView({ onLoadout, onAgain }) {
         const lumens = Math.max(1, Math.round(r.lumensBase * mult));
         const [headline, sub] = r.survived
           ? surviveMessage({ character: cfg.character.id, craft: cfg.craft.id })
-          : deathMessage({ cause: r.cause, character: cfg.character.id, craft: r.salmon ? 'salmon' : cfg.craft.id, wrecked: r.wrecked });
+          : deathMessage({ cause: r.cause, character: cfg.character.id, craft: r.salmon ? 'salmon' : cfg.craft.id, wrecked: r.wrecked, poop: r.poop });
         recordRun({ ...r, lumens });
         // what can we afford now?
         const after = store.get();

@@ -190,7 +190,7 @@ export const CRAFTS = [
     bounce: 1,
     ability: { id: 'flap', name: 'FLAP', cd: 1.4, dur: 1.4, desc: 'Fly over anything. HONK.' },
     drop: 'glide',
-    dropTip: 'Glide down and grab the golden lumens. You cannot die. HONK.',
+    dropTip: 'Glide down the falls like royalty. Flap to float, steer anywhere. You cannot die. HONK.',
     desc: '100% survival. Lays golden eggs. Honks at danger. The legend.',
     stats: { speed: 5, steer: 5, tough: 5 },
     alwaysSurvive: true,

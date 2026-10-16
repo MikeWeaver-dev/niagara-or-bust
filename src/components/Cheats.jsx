@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import MenuBackground from './MenuBackground.jsx';
-import { TopBar, useToast } from './common.jsx';
+import { TopBar, useToast, GoButton } from './common.jsx';
 import { CHEATS, CODES } from '../data/cheats.js';
 import { useSave, setCheat, addLumens, unlockAll, resetProgress, store } from '../store.js';
 import { audio } from '../audio/audio.js';
@@ -95,6 +95,9 @@ export default function Cheats() {
             ))}
           </div>
         </div>
+      </div>
+      <div className="go-float">
+        <GoButton />
       </div>
       {toast}
     </>

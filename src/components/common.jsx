@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSave, lumenMultiplier } from '../store.js';
+import { useSave, lumenMultiplier, isOwned } from '../store.js';
 import { audio } from '../audio/audio.js';
 
 export function Lumens() {
@@ -83,5 +83,25 @@ export function Pips({ n }) {
         <span key={i} className={`pip ${i <= n ? 'on' : ''}`} />
       ))}
     </span>
+  );
+}
+
+// Jump straight into a run with the current loadout
+export function GoButton({ className = '' }) {
+  const nav = useNavigate();
+  const save = useSave();
+  const ok = (isOwned('character', save.selected.character, save) || save.cheats.tryAll) && (isOwned('craft', save.selected.craft, save) || save.cheats.tryAll || save.cheats.salmon);
+  return (
+    <button
+      className={`btn go-btn ${className}`}
+      disabled={!ok}
+      title={ok ? 'Play now with your current character and vessel' : 'Select something you own first'}
+      onClick={() => {
+        audio.click();
+        nav('/play', { state: { autostart: true } });
+      }}
+    >
+      GO! 🌊
+    </button>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import MenuBackground from './MenuBackground.jsx';
 import ItemCard from './ItemCard.jsx';
-import { TopBar, useToast } from './common.jsx';
+import { TopBar, useToast, GoButton } from './common.jsx';
 import { CHARACTERS } from '../data/characters.js';
 import { CRAFTS } from '../data/crafts.js';
 import { useSave, lumenMultiplier } from '../store.js';
@@ -41,6 +41,9 @@ export default function Shop() {
             ))}
           </div>
         </div>
+      </div>
+      <div className="go-float">
+        <GoButton />
       </div>
       {toast}
     </>

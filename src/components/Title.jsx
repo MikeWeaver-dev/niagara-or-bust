@@ -22,13 +22,14 @@ export default function Title() {
     <>
       <MenuBackground />
       <div className="screen center">
-        {canFullscreen() && (
-          <div className="corner-l">
+        <div className="corner-l">
+          <div className="kt-note">Go Kids Table!!!</div>
+          {canFullscreen() && (
             <button className="icon-btn" aria-label="Fullscreen" onClick={toggleFullscreen}>
               ⛶
             </button>
-          </div>
-        )}
+          )}
+        </div>
         <div className="corner">
           <Lumens />
         </div>
