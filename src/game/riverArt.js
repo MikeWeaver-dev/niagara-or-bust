@@ -12,33 +12,39 @@ const PATH = '#d8cfc0';
 
 // ---------------------------------------------------------------- beyond the brink
 export function drawBeyond(v) {
-  const { ctx, W, sx, sy, t } = v;
+  const { ctx, W, sx, sy, t, S } = v;
   const bc = brinkAt(0);
-  const yTop = 0;
   const yBrink = sy(bc);
   if (yBrink < -50) return; // not visible yet
-  // deep gorge + plunge pool far below
-  const g = ctx.createLinearGradient(0, yBrink, 0, yTop);
-  g.addColorStop(0, '#e9f7ff');
-  g.addColorStop(0.15, '#a9dbe8');
-  g.addColorStop(0.5, '#2c7f86');
-  g.addColorStop(1, '#0d4650');
+  // the plunge pool far below, glimpsed through the spray
+  const g = ctx.createLinearGradient(0, yBrink, 0, yBrink - 28 * S);
+  g.addColorStop(0, '#6cc2c6');
+  g.addColorStop(0.2, '#2f8f97');
+  g.addColorStop(1, '#0c4753');
   ctx.fillStyle = g;
-  ctx.fillRect(0, yTop, W, yBrink - yTop + 40);
-  // foam rings on plunge pool
+  ctx.fillRect(0, 0, W, yBrink + 40);
+  // churning foam on the pool
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  for (let i = 0; i < 26; i++) {
+    const x = Math.sin(i * 7.7) * RW * 1.3;
+    const d = bc + 5 + ((i * 3.3 + t * 0.6) % 22);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(sx(x), sy(d), S * (0.8 + (i % 4) * 0.4), S * 0.3, 0, 0, TAU);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
   ctx.lineWidth = 3;
   for (let i = 0; i < 6; i++) {
     const k = (t * 0.15 + i / 6) % 1;
     ctx.globalAlpha = 0.5 * (1 - k);
     ctx.beginPath();
-    ctx.ellipse(sx(0), sy(bc + 20), (2 + k * 14) * v.S, (1 + k * 6) * v.S, 0, 0, TAU);
+    ctx.ellipse(sx(0), sy(bc + 16), (2 + k * 14) * S, (1 + k * 6) * S, 0, 0, TAU);
     ctx.stroke();
   }
   ctx.restore();
   // Maid of the Mist far below
-  drawTinyBoat(ctx, sx(4 + Math.sin(t * 0.2) * 2), sy(bc + 26), v.S * 0.5, t);
+  drawTinyBoat(ctx, sx(4 + Math.sin(t * 0.2) * 2), sy(bc + 24), S * 0.5, t);
   // gorge walls (follow the horseshoe)
   [-1, 1].forEach((s) => {
     ctx.fillStyle = '#7a5a3a';
@@ -63,24 +69,14 @@ export function drawBeyond(v) {
       ctx.stroke();
     }
   });
-  // rising mist puffs
+  // a soft rainbow hanging in the spray
   ctx.save();
-  for (let i = 0; i < 18; i++) {
-    const ph = (t * 0.12 + i * 0.37) % 1;
-    const x = Math.sin(i * 12.9) * RW * 1.1 + Math.sin(t * 0.3 + i) * 1.5;
-    const d = bc + 2 + ph * 22;
-    const r = (3.5 + (i % 4)) * v.S * (0.6 + ph * 0.8);
-    puff(ctx, sx(x), sy(d), r, 0.8 * Math.sin(ph * Math.PI));
-  }
-  ctx.restore();
-  // rainbow arc over the mist
-  ctx.save();
-  ctx.globalAlpha = 0.32;
-  ctx.lineWidth = Math.max(4, v.S * 0.45);
+  ctx.globalAlpha = 0.18;
+  ctx.lineWidth = Math.max(3, S * 0.3);
   RAINBOW.slice(0, 6).forEach((c, i) => {
     ctx.strokeStyle = c;
     ctx.beginPath();
-    ctx.ellipse(sx(0), sy(bc + 6), (RW * 1.1 - i * 0.45) * v.S, (RW * 0.9 - i * 0.45) * v.S, 0, Math.PI, TAU);
+    ctx.ellipse(sx(0), sy(bc + 12), (RW * 0.8 - i * 0.3) * S, (RW * 0.55 - i * 0.3) * S, 0, Math.PI, TAU);
     ctx.stroke();
   });
   ctx.restore();
@@ -237,30 +233,63 @@ export function drawWater(v, opt) {
     ctx.stroke();
   });
 
-  // brink lip: bright foam band + falling curtain
+  // the brink: water pouring over a rolling white lip, spray billowing up from below
   if (!opt.salmon && sy(brinkAt(RW)) > -40) {
     ctx.save();
     ctx.lineCap = 'round';
-    for (let i = 0; i <= 40; i++) {
-      const x = -RW + (i / 40) * RW * 2;
-      const d = brinkAt(x);
-      const y = sy(d);
-      const wob = Math.sin(t * 9 + i * 1.7) * S * 0.12;
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.beginPath();
-      ctx.arc(sx(x), y + wob, S * 0.35, 0, TAU);
-      ctx.fill();
-      // curtain streaks falling away
-      const len = (2 + Math.sin(i * 3.1) * 0.7) * S;
+    ctx.lineJoin = 'round';
+    // 1) the curtain falling away beyond the lip
+    for (let i = 0; i <= 80; i++) {
+      const x = -RW + (i / 80) * RW * 2;
+      const y = sy(brinkAt(x));
+      const len = (2.6 + ((i * 37) % 10) / 4) * S;
       const gg = ctx.createLinearGradient(0, y, 0, y - len);
-      gg.addColorStop(0, 'rgba(240,255,255,0.9)');
-      gg.addColorStop(1, 'rgba(140,210,220,0)');
+      gg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      gg.addColorStop(0.5, 'rgba(228,248,252,0.6)');
+      gg.addColorStop(1, 'rgba(200,240,248,0)');
       ctx.strokeStyle = gg;
-      ctx.lineWidth = S * 0.35;
+      ctx.lineWidth = S * 0.34;
       ctx.beginPath();
       ctx.moveTo(sx(x), y);
-      ctx.lineTo(sx(x * 1.03), y - len);
+      ctx.lineTo(sx(x * 1.05), y - len);
       ctx.stroke();
+      const ph = (t * 1.6 + i * 0.37) % 1;
+      ctx.fillStyle = `rgba(255,255,255,${0.85 * (1 - ph)})`;
+      ctx.beginPath();
+      ctx.arc(sx(x * (1 + ph * 0.05)), y - ph * len, S * 0.1, 0, TAU);
+      ctx.fill();
+    }
+    // 2) mist billowing up out of the gorge
+    for (let i = 0; i < 24; i++) {
+      const ph = (t * 0.18 + i * 0.29) % 1;
+      const x = -RW * 1.1 + ((i * 0.137) % 1) * RW * 2.2;
+      const dd = brinkAt(x) + 1.2 + ph * 9;
+      puff(ctx, sx(x), sy(dd), (1.8 + (i % 4) * 0.6) * S * (0.7 + ph * 0.9), 0.75 * Math.sin(ph * Math.PI));
+    }
+    // 3) the lip itself: one continuous rolling band of foam
+    const lip = (off, width, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (let i = 0; i <= 60; i++) {
+        const x = -RW + (i / 60) * RW * 2;
+        const y = sy(brinkAt(x) - off) + Math.sin(t * 8 + i * 1.3) * S * 0.06;
+        if (i === 0) ctx.moveTo(sx(x), y);
+        else ctx.lineTo(sx(x), y);
+      }
+      ctx.stroke();
+    };
+    lip(0.35, S * 0.9, 'rgba(255,255,255,0.45)');
+    lip(0.05, S * 0.5, 'rgba(255,255,255,0.97)');
+    lip(0.05, S * 0.18, 'rgba(210,245,250,0.9)');
+    // foam clumps riding toward the edge
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 40; i++) {
+      const x = -RW + ((i * 0.618) % 1) * RW * 2;
+      const back = ((t * 1.2 + i * 0.29) % 1) * 2.5;
+      ctx.beginPath();
+      ctx.arc(sx(x), sy(brinkAt(x) - 0.3 - back), S * (0.08 + (i % 3) * 0.05), 0, TAU);
+      ctx.fill();
     }
     ctx.restore();
   }

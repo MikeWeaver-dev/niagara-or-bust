@@ -412,10 +412,12 @@ export class Drop {
       else if (this.info.ko && !this.forced) cause = 'unconscious';
       else if (Math.random() < Math.max(rockChance, this.forced ? 0.6 : 0)) cause = 'rocks';
       else cause = Math.random() < 0.85 || this.cheats.goreGalore || this.poop || this.forced ? 'water' : 'drown';
+      if (import.meta.env.DEV && window.__nobForceCause) cause = window.__nobForceCause; // QA hook (dev server only)
       if (cause === 'rocks') {
         // which rock gets you: a spike (impaled), a slab (pancaked) or a plain old boulder
         const v = Math.random();
         cause = v < 0.36 ? 'impaled' : v < 0.68 ? 'pancake' : 'rocks';
+        if (import.meta.env.DEV && window.__nobForceRock) cause = window.__nobForceRock;
       }
       if (['rocks', 'impaled', 'pancake'].includes(cause) || (cause === 'unconscious' && Math.random() < 0.5) || (cause === 'explode' && Math.random() < 0.5)) {
         const want = cause === 'impaled' ? 'spike' : cause === 'pancake' ? 'flat' : null;
@@ -765,8 +767,9 @@ export class Drop {
     bigText(ctx, 'young grasshopper!', sx, by + bh * 0.5, fs, '#3a1e08', 'rgba(255,240,210,0.6)', 'center', 3);
     bigText(ctx, '- Annie', sx + bw * 0.18, by + bh * 0.78, fs * 0.9, '#6a1e2e', 'rgba(255,240,210,0.6)', 'center', 3);
     // the goose and rider
-    let gx = W * 0.16;
-    if (Cv.exit) gx = W * 0.16 + Math.min(1, Cv.exitT / 1.0) * W * 0.5;
+    const gx0 = Math.max(W * 0.16, S * 1.9);
+    let gx = gx0;
+    if (Cv.exit) gx = gx0 + Math.min(1, Cv.exitT / 1.0) * (W * 0.66 - gx0);
     ctx.save();
     ctx.translate(gx, ground - S * 0.55);
     ctx.scale(S, S);
@@ -1056,23 +1059,45 @@ export class Drop {
     }
     // golden goose glides (and always stays upright, it is a professional)
     if (this.craftId === 'goose' && this.body) {
-      if (falling || this.stage === 'after') {
-        const ax = inp.axisX();
+      if (this.forced === 'banana') {
+        // the goose bails: flaps up and away, honking, while you fall
+        this.body.pts.forEach((p) => {
+          p.ay -= this.phys.gravity * 1.25;
+          p.ax += 9;
+        });
+        this.gooseFlap = true;
+      } else if (falling || this.stage === 'after') {
+        const by = this.body.cy;
+        const bx = this.body.cx;
+        let ax = inp.axisX();
         const flap = inp.isDown('primary') || inp.axisY() < -0.3;
         const dive = inp.axisY() > 0.3;
-        const lift = this.stage === 'after' ? 0 : flap ? 1.0 : dive ? 0.25 : 0.55;
-        const maxVy = flap ? 3 : dive ? 14 : 7.5;
-        const pts = this.forced === 'banana' ? this.body.pts : [...this.body.pts, ...this.rider.pts];
+        // the goose gets tired after a while, so every flight comes down eventually
+        this.gooseTired = this.stage === 'fall' && this.stageT > 8;
+        let lift = this.stage === 'after' ? 0 : flap ? 1.0 : dive ? 0.25 : 0.55;
+        let maxVy = flap ? 3 : dive ? 14 : 7.5;
+        if (this.gooseTired) {
+          lift = Math.min(lift, 0.45);
+          maxVy = Math.max(maxVy, 9);
+        }
+        // no flying back up over the lip and upstream
+        if (by < 4) lift = Math.min(lift, lerp(0.2, lift, clamp((by - 1.5) / 2.5, 0, 1)));
+        if (by < 3 && bx < 1.5) ax = Math.max(ax, 0.6);
+        const pts = [...this.body.pts, ...this.rider.pts];
         pts.forEach((p) => {
           p.ay -= this.phys.gravity * lift;
           p.ax += ax * 10 + (this.stage === 'fall' ? 1.2 : 0);
           const vy = (p.y - p.py) / h;
           if (vy > maxVy) p.py = p.y - maxVy * h;
+          if (by < 3 && vy < 0) p.py = p.y - vy * 0.9 * h; // damp any climb near the top
         });
-        this.gooseFlap = flap;
+        this.gooseFlap = flap && !this.gooseTired;
         if (flap && Math.random() < 0.02) audio.whoosh(0.25);
       }
       this.stabilize(this.body, 0.05, 6, h);
+    } else if (this.body && this.stage === 'approach' && !this.vesselBroken) {
+      // keep top-heavy boats from capsizing on the run-up to the lip
+      this.stabilize(this.body, 0, 5, h);
     }
   }
 
@@ -1191,7 +1216,7 @@ export class Drop {
       if (this.mini.chute && this.mini.chute.deployed && this.core().y > POOL_Y + 2) this.onImpact('water', this.core(), 10);
       // safety: if something weird happens, force impact
       if (c.y > POOL_Y + 3 && this.stage === 'fall') this.onImpact('water', c, 10);
-      if (this.stageT > 14) this.onImpact('water', c, 10);
+      if (this.stageT > 14) this.onImpact('water', { x: Math.max(c.x, cliffX(POOL_Y) + 2), y: POOL_Y }, 10);
       return;
     }
     if (this.stage === 'after') {
@@ -1972,9 +1997,9 @@ export class Drop {
       drawButton(ctx, btn, { color: '#2bb673', pulse: Math.sin(t * 8) });
     } else if (MINI_MODES.includes(mode) && this.stage === 'fall' && !this.mini.done && !this.info.ko) {
       this.drawMiniUI(ctx, cp, touch, btnR);
-    } else if (mode === 'glide' && this.stage === 'fall') {
+    } else if (mode === 'glide' && this.stage === 'fall' && this.forced !== 'banana') {
       bigText(ctx, touch ? 'HOLD FLAP TO FLOAT · DRAG TO STEER' : 'SPACE / ▲ FLAP · ◀ ▶ STEER', W / 2, H * 0.2, Math.min(20, W * 0.042), '#ffd23b');
-      bigText(ctx, 'THE GOOSE HAS YOU. RELAX.', W / 2, H * 0.2 + 26, 15, '#fff');
+      bigText(ctx, this.gooseTired ? 'THE GOOSE IS GETTING TIRED...' : 'THE GOOSE HAS YOU. RELAX.', W / 2, H * 0.2 + 26, 15, this.gooseTired ? '#ffb0b0' : '#fff');
       if (touch) {
         const btn = { id: 'flap', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'FLAP!', action: 'primary' };
         this.g.input.setButtons([btn]);

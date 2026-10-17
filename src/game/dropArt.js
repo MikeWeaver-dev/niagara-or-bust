@@ -1,6 +1,6 @@
 // Side-view art for the big drop: sky, skyline, the horseshoe curtain, mist, rainbow,
 // our cliff, the falling water sheet, the plunge pool, rocks and the tour boat.
-import { TAU, hsl, rng, shade } from './util.js';
+import { TAU, hsl, rng, shade, clamp } from './util.js';
 import { OUTLINE, drawUpright } from './charArt.js';
 import { RAINBOW } from '../data/characters.js';
 
@@ -194,44 +194,72 @@ export function drawFarFalls(v) {
     ctx.arc(p.x, p.y - sc * 2, sc * 3.2, 0, TAU);
     ctx.fill();
   }
-  // curtain
+  // the far side of the horseshoe: a distant curtain of falling white water
   const top = L(v, f, -40, -1);
   const right = L(v, f, 72, 1);
   const bot = L(v, f, 0, POOL_Y);
-  const g = ctx.createLinearGradient(0, top.y, 0, bot.y);
-  g.addColorStop(0, v.disco ? hsl((t * 60) % 360, 80, 70) : '#3fb8ad');
-  g.addColorStop(0.06, '#a9e4ea');
-  g.addColorStop(0.45, '#7ccbd8');
-  g.addColorStop(0.85, '#b9e6ef');
-  g.addColorStop(1, '#e8f8fc');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(top.x, top.y);
-  ctx.quadraticCurveTo((top.x + right.x) / 2, top.y - sc * 6, right.x, right.y);
-  ctx.lineTo(right.x, bot.y);
-  ctx.lineTo(top.x, bot.y);
-  ctx.closePath();
-  ctx.fill();
-  // animated falling streaks
-  ctx.save();
-  ctx.clip();
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-  ctx.lineWidth = Math.max(1, sc * 0.5);
-  for (let i = 0; i < 60; i++) {
-    const lx = -40 + (i / 60) * 112;
-    const ph = (t * 0.7 + i * 0.137) % 1;
-    const a = L(v, f, lx, ph * POOL_Y - 6);
+  const crest = (k) => ({ x: top.x + (right.x - top.x) * k, y: top.y + (right.y - top.y) * k - Math.sin(k * Math.PI) * sc * 3 });
+  const curtain = () => {
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(a.x, a.y + sc * 7);
+    ctx.moveTo(top.x, top.y);
+    for (let i = 1; i <= 24; i++) {
+      const c = crest(i / 24);
+      ctx.lineTo(c.x, c.y);
+    }
+    ctx.lineTo(right.x, bot.y);
+    ctx.lineTo(top.x, bot.y);
+    ctx.closePath();
+  };
+  curtain();
+  const g = ctx.createLinearGradient(0, top.y, 0, bot.y);
+  g.addColorStop(0, v.disco ? hsl((t * 60) % 360, 80, 75) : '#f4fdff');
+  g.addColorStop(0.08, '#cfeff4');
+  g.addColorStop(0.5, '#a9dbe5');
+  g.addColorStop(0.85, '#d6f2f6');
+  g.addColorStop(1, '#f4fdff');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.save();
+  curtain();
+  ctx.clip();
+  // darker channels give the sheet depth
+  for (let i = 0; i < 14; i++) {
+    const c = crest((i + 0.5) / 14);
+    ctx.fillStyle = 'rgba(60,140,165,0.13)';
+    ctx.fillRect(c.x - sc * 1.6, c.y, sc * (1.2 + (i % 3)), bot.y - c.y);
+  }
+  // fine streaks pouring down
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 120; i++) {
+    const k = (i * 0.618) % 1;
+    const c = crest(k);
+    const speed = 0.45 + ((i * 37) % 10) / 30;
+    const ph = (t * speed + i * 0.137) % 1;
+    const y = c.y + ph * (bot.y - c.y);
+    const len = sc * (5 + (i % 6) * 1.5);
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + (i % 3) * 0.18})`;
+    ctx.lineWidth = Math.max(1, sc * (0.12 + (i % 3) * 0.06));
+    ctx.beginPath();
+    ctx.moveTo(c.x, y);
+    ctx.lineTo(c.x, y + len);
     ctx.stroke();
   }
   ctx.restore();
+  // bright foam where the river tips over the far crest
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.lineWidth = Math.max(2, sc * 1.1);
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i++) {
+    const c = crest(i / 24);
+    if (i === 0) ctx.moveTo(c.x, c.y);
+    else ctx.lineTo(c.x, c.y + Math.sin(i * 1.9 + t * 3) * sc * 0.3);
+  }
+  ctx.stroke();
   // mist cloud at the base of the curtain
   for (let i = 0; i < 12; i++) {
     const ph = (t * 0.08 + i * 0.21) % 1;
     const p = L(v, f, -35 + i * 9.5, POOL_Y - 2 - ph * 14);
-    puff(ctx, p.x, p.y, sc * (9 + (i % 3) * 3), 0.8 * Math.sin(ph * Math.PI));
+    puff(ctx, p.x, p.y, sc * (9 + (i % 3) * 3), 0.85 * Math.sin(ph * Math.PI));
   }
 }
 
@@ -291,63 +319,109 @@ export function drawCliff(ctx, t, lw) {
 }
 
 export function drawUpstream(ctx, t, lw, disco) {
-  // river surface left of the lip
+  // river surface left of the lip, speeding up and churning white as it nears the edge
   const g = ctx.createLinearGradient(0, -0.2, 0, LIP_DEPTH);
-  g.addColorStop(0, disco ? hsl((t * 90) % 360, 80, 55) : '#2bb3a3');
-  g.addColorStop(1, '#16786f');
+  g.addColorStop(0, disco ? hsl((t * 90) % 360, 80, 55) : '#33bfae');
+  g.addColorStop(1, '#14706a');
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.moveTo(-400, 0);
-  for (let x = -60; x <= 0; x += 0.5) ctx.lineTo(x, Math.sin(x * 1.3 + t * 7) * 0.05 - (x > -3 ? (x + 3) * 0.02 : 0));
-  ctx.lineTo(0, LIP_DEPTH);
+  for (let x = -60; x <= 0; x += 0.25) ctx.lineTo(x, Math.sin(x * 1.3 + t * 7) * 0.05 * (1 + clamp((x + 6) / 6, 0, 1)) - (x > -3 ? (x + 3) * 0.025 : 0));
+  ctx.lineTo(0.05, LIP_DEPTH);
   ctx.lineTo(-400, LIP_DEPTH);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = lw;
-  for (let i = 0; i < 18; i++) {
-    const x = -60 + ((i * 3.7 + t * WATER_V) % 60);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 48; i++) {
+    const x = -16 + ((i * 2.3 + t * WATER_V * 1.2) % 16);
+    const k = clamp((x + 16) / 16, 0, 1);
+    const y = 0.07 + ((i * 7) % 5) * 0.13;
+    ctx.strokeStyle = `rgba(255,255,255,${0.2 + k * 0.65})`;
+    ctx.lineWidth = lw * (1 + k * 1.8);
     ctx.beginPath();
-    ctx.moveTo(x, 0.15 + (i % 3) * 0.2);
-    ctx.lineTo(x + 0.9, 0.15 + (i % 3) * 0.2);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 0.5 + k * 0.9, y + k * 0.03);
     ctx.stroke();
+  }
+  // whitecaps piling up right at the edge
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let i = 0; i < 12; i++) {
+    const x = -3.4 + ((i * 0.61 + t * 3.2) % 3.4);
+    const r = 0.1 + (i % 3) * 0.06 + clamp((x + 3.4) / 3.4, 0, 1) * 0.12;
+    ctx.beginPath();
+    ctx.arc(x, -0.03 + Math.sin(t * 9 + i) * 0.04 - (x > -3 ? (x + 3) * 0.025 : 0), r, 0, TAU);
+    ctx.fill();
   }
 }
 
 // The thick sheet of water pouring over our lip
 export function drawSheet(ctx, t, lw, disco) {
-  const outer = (y) => WATER_V * Math.sqrt(y / 11);
+  const outer = (y) => WATER_V * Math.sqrt(Math.max(0, y) / 11);
   const inner = (y) => (WATER_V - 2.6) * Math.sqrt(Math.max(0, y - LIP_DEPTH) / 11) - 0.05;
+  const shape = () => {
+    ctx.beginPath();
+    ctx.moveTo(0, -0.05);
+    for (let y = 0; y <= POOL_Y; y += 0.5) ctx.lineTo(outer(y) + Math.sin(y * 2.3 + t * 9) * 0.1 * Math.min(1, y / 6), y);
+    for (let y = POOL_Y; y >= LIP_DEPTH; y -= 1) ctx.lineTo(inner(y), y);
+    ctx.lineTo(0, LIP_DEPTH);
+    ctx.closePath();
+  };
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(0, -0.05);
-  for (let y = 0; y <= POOL_Y; y += 1) ctx.lineTo(outer(y), y);
-  for (let y = POOL_Y; y >= LIP_DEPTH; y -= 1) ctx.lineTo(inner(y), y);
-  ctx.lineTo(0, LIP_DEPTH);
-  ctx.closePath();
+  shape();
   const g = ctx.createLinearGradient(0, 0, 0, POOL_Y);
-  g.addColorStop(0, disco ? hsl((t * 90) % 360, 80, 55) : '#30c1ae');
-  g.addColorStop(0.15, '#a8f0f0');
-  g.addColorStop(0.6, '#e6fbff');
+  g.addColorStop(0, disco ? hsl((t * 90) % 360, 80, 55) : '#2fb7a6');
+  g.addColorStop(0.04, '#74dad2');
+  g.addColorStop(0.12, '#cdf5f5');
+  g.addColorStop(0.5, '#effcff');
   g.addColorStop(1, '#ffffff');
   ctx.fillStyle = g;
-  ctx.globalAlpha = 0.92;
   ctx.fill();
   ctx.clip();
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-  ctx.lineWidth = lw * 1.2;
-  for (let i = 0; i < 70; i++) {
+  // depth: the inner side of the sheet is darker
+  ctx.fillStyle = 'rgba(30,120,135,0.22)';
+  ctx.beginPath();
+  ctx.moveTo(0, LIP_DEPTH);
+  for (let y = LIP_DEPTH; y <= POOL_Y; y += 1) ctx.lineTo(inner(y) + 0.9, y);
+  for (let y = POOL_Y; y >= LIP_DEPTH; y -= 1) ctx.lineTo(inner(y) - 0.2, y);
+  ctx.fill();
+  // streaks flowing along the falling trajectories
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 150; i++) {
     const k = (i * 0.618) % 1;
     const v = WATER_V - 2.6 * k;
-    const tt = (t * 0.55 + i * 0.173) % 2.2;
-    const t2 = tt + 0.12;
+    const speed = 0.5 + ((i * 37) % 10) / 40;
+    const tt = (t * speed + i * 0.173) % 2.25;
+    const t2 = tt + 0.08 + ((i * 13) % 7) / 60;
+    ctx.strokeStyle = i % 3 ? 'rgba(255,255,255,0.85)' : 'rgba(110,195,205,0.5)';
+    ctx.lineWidth = lw * (0.7 + (i % 4) * 0.55);
     ctx.beginPath();
     ctx.moveTo(v * tt, 11 * tt * tt);
     ctx.lineTo(v * t2, 11 * t2 * t2);
     ctx.stroke();
   }
+  // white clumps tumbling down the face
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for (let i = 0; i < 28; i++) {
+    const tt = (t * 0.62 + i * 0.21) % 2.2;
+    const v = WATER_V - 2.6 * ((i * 0.37) % 1);
+    ctx.beginPath();
+    ctx.arc(v * tt, 11 * tt * tt, 0.1 + (i % 3) * 0.09, 0, TAU);
+    ctx.fill();
+  }
   ctx.restore();
+  // a foamy crest rolling over the edge
+  for (let i = 0; i < 16; i++) {
+    const x = -1.9 + i * 0.2;
+    const y = x < 0 ? -0.06 - (x > -1 ? (x + 1) * 0.03 : 0) : 11 * Math.pow(x / WATER_V, 2) - 0.05;
+    const r = 0.16 + ((i * 7) % 4) * 0.05 + Math.sin(t * 11 + i) * 0.03;
+    puff(ctx, x, y, r * 2.2, 0.95);
+  }
+  // spray peeling off the outer face of the falls
+  for (let i = 0; i < 18; i++) {
+    const ph = (t * 0.5 + i * 0.13) % 1;
+    const y0 = 1.5 + ((i * 3.1) % 40);
+    puff(ctx, outer(y0) + ph * 1.8, y0 + ph * 1.4, 0.45 + ph * 1.0, 0.55 * (1 - ph));
+  }
 }
 
 function rockBody(ctx, r) {

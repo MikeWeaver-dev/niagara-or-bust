@@ -3,7 +3,7 @@
 import { audio } from '../audio/audio.js';
 import { music } from '../audio/music.js';
 import { FX, Splatter, goreOf } from './fx.js';
-import { clamp, lerp, rand, rng, pick, approach, segDist, bigText, TAU, easeOutBack } from './util.js';
+import { clamp, lerp, rand, rng, pick, approach, segDist, bigText, TAU, easeOutBack, roundRect } from './util.js';
 import { RW, RIVER_LEN, brinkAt, laneOf, LANE_NAME, LANE_BONUS, LANE_TIP, computeOdds, oddsColor } from './odds.js';
 import * as art from './riverArt.js';
 import { drawUpright, drawSalmonTop, drawBear, drawCat, GARY } from './charArt.js';
@@ -13,6 +13,7 @@ import { OUCH, SCREAMS, lastWords, VOICE_PITCH } from '../data/messages.js';
 import { SALMON } from '../data/crafts.js';
 
 const CHUNK = 16;
+const DEATH_LABEL = { lightning: 'DIED FROM LIGHTNING', randombear: 'MAULED BY A BEAR', shot: 'SHOT DEAD' };
 const SNIPERS = [
   { id: 'tourist', kind: 'human', scale: 1.05, headScale: 1, hat: 'cap', extras: ['sunglasses'], colors: { skin: '#e8b48e', hair: '#5a3a20', shirt: '#b8302a', shirt2: '#3a1010', collar: '#fff', pants: '#3a4a6a', shoes: '#2a2018', hat: '#ff7a1a', hatBand: '#fff', accent: '#fff' } },
   { id: 'tourist', kind: 'human', scale: 1.1, headScale: 1, hat: 'none', extras: ['beard'], colors: { skin: '#c8906a', hair: '#2a1a10', shirt: '#5a6a3a', shirt2: '#3a4a2a', collar: '#fff', pants: '#4a4030', shoes: '#2a2018', hat: '#000', hatBand: '#000', accent: '#fff' } },
@@ -74,7 +75,8 @@ export class River {
       if (cheats.lightning || roll < 0.01) this.fluke = { kind: 'lightning', at: rand(5, 14) };
       else if (cheats.randomBear || roll < 0.02) this.fluke = { kind: 'bear', at: rand(5, 14) };
     }
-    this.agent = character.id === 'kacey' && !this.salmon ? { type: 'agent', x: -(RW + 2.4), d: brinkAt(-RW) - 9 } : null;
+    // Kacey's admirer: a border agent on a rock right at the lip, placed on whichever side you'll pass
+    this.agent = character.id === 'kacey' && !this.salmon ? { type: 'agent', x: -RW + 1, d: brinkAt(-RW + 1) - 1.4, verts: [1, 0.9, 1.05, 0.95, 1.1, 0.92, 1, 0.97] } : null;
 
     if (this.salmon) {
       this.p.x = -RW - 2.2;
@@ -168,7 +170,7 @@ export class River {
     }
     if (this.hard && d0 > 24 && d0 < RIVER_LEN - 30 && r() < 0.6) {
       const side = r() < 0.5 ? -1 : 1;
-      this.props.push({ type: 'shooter', x: side * (RW + 2.4), d: d0 + r() * CHUNK, weapon: r() < 0.5 ? 'slingshot' : 'bb', cd: 1 + r() * 2, dead: false, seed: Math.floor(r() * 1e6), aim: 0 });
+      this.props.push({ type: 'shooter', x: side * (RW + 1.4), d: d0 + r() * CHUNK, weapon: r() < 0.5 ? 'slingshot' : 'bb', cd: 1 + r() * 2, dead: false, seed: Math.floor(r() * 1e6), aim: 0 });
     }
     if (this.hard && c === 3) add({ type: 'slingshot', x: (r() * 2 - 1) * RW * 0.5, d: d0 + 8 });
     // lumens to collect
@@ -313,6 +315,8 @@ export class River {
     }
     this.trail.forEach((tr) => (tr.life -= dt * 1.4));
 
+    this.updateEffects(dt);
+    this.updateAgent();
     this.fx.update(dt);
     this.splat.update(dt);
     this.updateCamera(dt);
@@ -886,7 +890,7 @@ export class River {
     audio.say(lastWords(this.ch.id, style === 'poop'), VOICE_PITCH[this.ch.id] || 1);
     audio.stopEngine();
     this.g.shake(1.2);
-    this.fx.text('YOU DIED.', p.x, p.d, '#ff3b3b', 34, 1.6, 2.6);
+    this.fx.text(DEATH_LABEL[cause] || 'YOU DIED.', p.x, p.d, '#ff3b3b', 34, 1.6, 2.6);
     this.fx.text("...BUT YOU'RE STILL GOING OVER", p.x, p.d - 1.4, '#fff', 18, 1.2, 2.6);
   }
 
@@ -910,6 +914,11 @@ export class River {
         this.say('BEAR!!', '#ff5a5a', 34);
       }
     }
+  }
+
+  // timers for the lightning bolt, the white flash and the surprise bear: run every frame, dead or alive
+  updateEffects(dt) {
+    const p = this.p;
     const M = this.mauler;
     if (M) {
       M.t += dt;
@@ -929,14 +938,15 @@ export class River {
         this.fx.gibs(p.x, p.d, 1.2, style, 0.8);
         if (style !== 'cartoon') this.fx.guts(p.x, p.d, 2, style, 0.8);
         this.die('randombear');
-      } else if (M.t < 2.2) {
-        M.x = p.x;
-        M.d = p.d + 0.6;
+      } else if (M.t < 1.6) {
+        M.x = lerp(M.x, p.x, Math.min(1, dt * 6));
+        M.d = lerp(M.d, p.d + 0.6, Math.min(1, dt * 6));
         M.mouth = Math.abs(Math.sin(M.t * 9)) * 0.6;
       } else {
         M.x = lerp(M.x, M.x0, Math.min(1, dt * 3));
+        M.z = 0;
         M.mouth = 0;
-        if (M.t > 3.6) this.mauler = null;
+        if (M.t > 3.2) this.mauler = null;
       }
     }
     this.flash = Math.max(0, this.flash - dt * 2.5);
@@ -986,12 +996,13 @@ export class River {
       }
       p.shootCd = 0.45;
       audio.thwip();
-      const tx = best ? best.x : p.x + (p.x < 0 ? -12 : 12);
-      const td = best ? best.d + p.vd * 0.2 : p.d + 6;
+      // shooters stand still on the bank, so aim straight at them (a little wobble keeps it sporting)
+      const tx = best ? best.x + rand(-0.35, 0.35) : p.x + (p.x < 0 ? -12 : 12);
+      const td = best ? best.d + rand(-0.35, 0.35) : p.d + 6;
       const dx = tx - p.x;
       const dd = td - p.d;
       const L = Math.hypot(dx, dd) || 1;
-      this.shots.push({ x: p.x, d: p.d, z: 1.2, vx: (dx / L) * 30, vd: (dd / L) * 30 + p.vd * 0.5, kind: 'slingshot', enemy: false, life: 1.2 });
+      this.shots.push({ x: p.x, d: p.d, z: 1.2, vx: (dx / L) * 30, vd: (dd / L) * 30, kind: 'slingshot', enemy: false, life: 1.2 });
     }
     this.updateShots(dt);
   }
@@ -1046,13 +1057,22 @@ export class River {
 
   killShooter(sh) {
     sh.dead = true;
-    const style = this.g.cfg.settings.gore === 'off' ? 'cartoon' : 'blood';
-    this.fx.blood(sh.x, sh.d, 0, 1, 1.6, style, 1.2);
-    this.fx.gibs(sh.x, sh.d, 0.8, style, 1.2);
-    audio.splat(0.8);
+    const gore = this.g.cfg.settings.gore;
+    const style = gore === 'off' ? 'cartoon' : this.g.cfg.poop ? 'poop' : 'blood';
+    const away = Math.sign(sh.x);
+    this.fx.blood(sh.x, sh.d, away, 0.4, 2.2, style, 1.4);
+    this.fx.blood(sh.x, sh.d, 0, -1, 1.2, style, 1.6);
+    this.fx.gibs(sh.x, sh.d, gore === 'max' ? 1.3 : 0.8, style, 1.2);
+    if (gore === 'max' && style !== 'cartoon') this.fx.guts(sh.x, sh.d, 2, style, 1.0);
+    this.g.shake(0.25);
+    audio.splat(1);
     audio.oof(0.9 + Math.random() * 0.4);
     this.run.lumens += 3;
-    this.fx.text(pick(['HEADSHOT! +3', 'GOT EM! +3', 'TAKE THAT! +3', 'BULLSEYE! +3']), sh.x, sh.d, '#ffd23b', 22, 2, 1.4);
+    const msg = pick(['HEADSHOT! +3', "GOT 'EM! +3", 'TAKE THAT! +3', 'BULLSEYE! +3']);
+    this.fx.text(msg, sh.x, sh.d, '#ffd23b', 22, 2, 1.4);
+    // on narrow phones the banks are off screen, so call it out in the HUD too
+    const v = this.view;
+    if (v && (v.sx(sh.x) < 0 || v.sx(sh.x) > this.g.W)) this.say(msg, '#ffd23b', 26);
   }
 
   drawShooter(ctx, v, sh) {
@@ -1122,9 +1142,24 @@ export class River {
     ctx.restore();
   }
 
+  // until the agent comes into view, keep sliding its rock to stay a few meters beside the player
+  updateAgent() {
+    const A = this.agent;
+    const p = this.p;
+    if (!A || A.frozen) return;
+    if (A.d - p.d < 24) {
+      A.frozen = true;
+      return;
+    }
+    const side = p.x > RW - 4.5 ? 1 : -1;
+    A.x = clamp(p.x + side * 4.2, -RW + 0.6, RW - 0.6);
+    A.d = brinkAt(A.x) - 1.4;
+  }
+
   drawAgent(ctx, v) {
     const A = this.agent;
     const { sx, sy, S, t } = v;
+    art.drawRock(v, { x: A.x, d: A.d + 0.15, r: 1.05, verts: A.verts, color: '#77706a' });
     ctx.save();
     ctx.translate(sx(A.x), sy(A.d));
     drawUpright(ctx, AGENT, S * 0.8, { pose: 'wave', expr: 'happy', t });
@@ -1139,10 +1174,13 @@ export class River {
     ctx.fill();
     // speech bubble
     const text = 'Let me pet you!';
-    ctx.font = `${Math.max(12, S * 0.32)}px "Luckiest Guy", sans-serif`;
+    ctx.font = `${Math.max(14, S * 0.42)}px "Luckiest Guy", sans-serif`;
     const w = ctx.measureText(text).width + S * 0.5;
-    const h = S * 0.62;
-    const bx = S * 0.3;
+    const h = S * 0.75;
+    // the bubble opens toward the river's middle so it stays on screen
+    const left = A.x > 0;
+    const bx = left ? -S * 0.3 - w : S * 0.3;
+    const tail = left ? bx + w - S * 0.7 : bx + S * 0.35;
     const by = -S * 2.7 + Math.sin(t * 3) * S * 0.05;
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#1a1030';
@@ -1151,14 +1189,14 @@ export class River {
     ctx.fill();
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(bx + S * 0.35, by + h - 1);
-    ctx.lineTo(bx + S * 0.1, by + h + S * 0.35);
-    ctx.lineTo(bx + S * 0.7, by + h - 1);
+    ctx.moveTo(tail, by + h - 1);
+    ctx.lineTo(left ? tail + S * 0.6 : tail - S * 0.25, by + h + S * 0.35);
+    ctx.lineTo(tail + S * 0.35, by + h - 1);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(bx + S * 0.3, by + h - 4, S * 0.42, 6);
+    ctx.fillRect(tail - S * 0.05, by + h - 4, S * 0.42, 6);
     ctx.fillStyle = '#c8102e';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1315,10 +1353,6 @@ export class River {
       if (!cartoon && Math.random() < 0.8) {
         this.fx.add({ x: mouthX + (Math.random() < 0.5 ? -0.55 : 0.55), y: mouthD - 0.1, z: 1.2, vx: rand(-0.3, 0.3), vy: rand(-0.5, 0.2), vz: -0.5, life: 1, size: rand(0.05, 0.09), color: pick(goreOf('blood').drops), kind: 'blood', drag: 0.4, style: 'blood' });
       }
-      if (!this.flags.vomitStarted && T > 1.7) {
-        this.flags.vomitStarted = true;
-        this.startTouristVomit();
-      }
     } else if (!this.flags.gulp) {
       this.flags.gulp = true;
       this.held = false;
@@ -1336,13 +1370,7 @@ export class River {
       for (let i = 0; i < 5; i++) this.fx.add({ x: mouthX, y: mouthD, z: 1.5, vx: rand(-4, 4), vy: rand(-3, 1), vz: rand(4, 8), life: 3, size: 0.16, color: '#fff', kind: 'fishbone', drag: 0.2 });
     }
     if (T > 4.1 && B.mouth > 0) B.mouth = Math.max(0, B.mouth - dt * 2);
-    if (T > 4.3 && !this.flags.viewerBarf && !cartoon) {
-      this.flags.viewerBarf = true;
-      this.splat.vomit();
-      audio.barf(1.1);
-    }
-    this.updateTouristVomit(dt);
-    if (T > (cartoon ? 4.4 : 6.6) && !this.flags.finished) {
+    if (T > (cartoon ? 4.4 : 5.6) && !this.flags.finished) {
       this.flags.finished = true;
       const lumens = 3 + Math.floor(this.run.upstream / 8) + this.run.lumens;
       audio.sadTrombone();
@@ -1364,33 +1392,6 @@ export class River {
     }
   }
 
-  // nearby tourists lose their lunch
-  startTouristVomit() {
-    const v = this.view;
-    const near = this.props.filter((pr) => pr.type === 'tourist' && v && pr.d > v.dMin && pr.d < v.dMax).slice(0, 4);
-    near.forEach((pr, i) => {
-      pr.vomit = { t: -i * 0.35, done: false };
-    });
-    if (!near.length) audio.barf(1.3);
-  }
-
-  updateTouristVomit(dt) {
-    this.props.forEach((pr) => {
-      if (!pr.vomit) return;
-      const V = pr.vomit;
-      V.t += dt;
-      if (V.t < 0) return;
-      if (!V.said) {
-        V.said = true;
-        audio.barf(0.8 + Math.random() * 0.6);
-        this.fx.text(pick(['BLEHHH!', 'HUURK!', 'OH NO-', 'BLARGH!']), pr.x, pr.d, '#c8e060', 22, 2.4, 1.4);
-      }
-      if (V.t < 1.4) {
-        const dir = pr.x < 0 ? 1 : -1;
-        this.fx.vomit(pr.x + dir * 0.2, pr.d, dir, -0.2, 3, 1.3);
-      }
-    });
-  }
   // ------------------------------------------------------------ brink
   startBrink() {
     const p = this.p;
@@ -1426,7 +1427,7 @@ export class River {
     p.d += p.vd * dt * 0.6;
     p.scale = Math.max(0.2, 1 - this.modeT * 0.55);
     p.rot = this.modeT * 1.2;
-    this.cam.zoom = approach(this.cam.zoom, 1.45, 3, dt);
+    this.cam.zoom = approach(this.cam.zoom, 1.18, 3, dt);
     if (this.catJump) this.catJump.t = Math.min(1, this.catJump.t + dt * 1.2);
     if (Math.random() < 0.6) this.fx.splash(p.x + rand(-1, 1), p.d + rand(0, 1), 0.3);
     if (this.modeT > 1.35 && !this.flags.toDrop) {
@@ -1946,11 +1947,8 @@ export class River {
     const t = this.t;
     this.splat.render(ctx, W, H);
     if (this.mode === 'bear' && this.bigBear && this.bigBear.bites && this.g.cfg.settings.gore !== 'off') {
-      const k = clamp((this.modeT - 1.2) / 3.1, 0, 1);
       if (Math.sin(t * 8) > -0.3) bigText(ctx, 'VIEWER DISCRETION ADVISED', W / 2, 86, Math.min(26, W * 0.055), '#ff3b3b');
       bigText(ctx, 'NATURE IS METAL', W / 2, 116, Math.min(18, W * 0.04), '#fff');
-      const bw = Math.min(W * 0.6, 300);
-      bar(ctx, W / 2 - bw / 2, H - 70, bw, 22, k, k < 0.6 ? '#c8e060' : '#8aa02a', k >= 1 ? 'BARF-O-METER: 100%' : `BARF-O-METER: ${Math.round(k * 100)}%`);
     }
     const touch = this.g.showTouch;
     const btnR = clamp(Math.min(W, H) * 0.11, 38, 56);
@@ -2041,7 +2039,8 @@ export class River {
       const ab = p.wrecked ? { name: 'PANIC!', cd: 4.5 } : this.craft.ability;
       if (p.dead) {
         this.g.input.setButtons([]);
-        bigText(ctx, 'DEAD. FLOATING TOWARD THE FALLS...', W / 2, H - 40, Math.min(20, W * 0.045), '#ff8a8a');
+        bigText(ctx, DEATH_LABEL[p.deadCause] || 'DEAD', W / 2, H - 66, Math.min(26, W * 0.06), '#ff5a5a');
+        bigText(ctx, '...STILL FLOATING TOWARD THE FALLS', W / 2, H - 36, Math.min(17, W * 0.04), '#ffb0b0');
       } else if (touch) {
         btn.label = ab.name;
         const list = [btn];

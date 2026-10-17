@@ -97,9 +97,10 @@ export const DEATH = {
     ['SLINGSHOTTED', 'David 1, Goliath 0. You were Goliath.'],
   ],
   lightning: [
-    ['STRUCK BY LIGHTNING', 'Statistically unlikely. Personally devastating.'],
-    ['ZAPPED', 'Water and electricity: a classic combo.'],
-    ['SMITED', 'Somebody up there really did not like that.'],
+    ['DIED FROM LIGHTNING', 'Statistically unlikely. Personally devastating.'],
+    ['DIED FROM LIGHTNING', 'Water and electricity: a classic combo.'],
+    ['DIED FROM LIGHTNING', 'Somebody up there really did not like that.'],
+    ['DIED FROM LIGHTNING', 'Then went over the falls anyway. Extra crispy.'],
   ],
   randombear: [
     ['A BEAR. FOR NO REASON.', 'It came out of nowhere. Bears do that.'],

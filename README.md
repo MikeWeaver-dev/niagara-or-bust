@@ -11,11 +11,22 @@ Start on the bank, pick your spot, jump in, paddle and dodge while the current d
 | Walk on the bank / steer | ◀ ▶ or A / D | drag on the left half of the screen |
 | Paddle faster / slower | ▲ ▼ or W / S | drag up / down |
 | Jump in / ability / mini-game | Space (or Enter / E / Shift) | big button on the right |
+| Shoot back (Hard Mode, once you grab the slingshot) | F or X | SHOOT button |
 | Pause | Esc / P | ❚❚ button |
 
 * **Lanes matter.** The middle of the river is the **Green Channel**: fastest current, but deep water at the bottom (+12%). The edges are slower but end in **rocks** (-10%).
 * **Your live survival odds** are always on screen. Damage lowers them, and so does a wrecked vessel (then you're swimming). Going faster helps you clear the rocks at the base.
-* **The drop is physics.** Each vessel has its own mini-game, then the dice roll on your final odds.
+* **The drop is physics.** Each vessel has its own mini-game, then the dice roll on your final odds. The bottom is full of rocks: round boulders, **pointy spikes** (impaled) and **flat slabs** (pancaked).
+* **Flukes.** About 1 trip in 100 you get struck by lightning, and about 1 in 100 a bear jumps you from the bank. No reason. That's nature.
+
+## Hard Mode
+
+Turn it on in **Settings** or with the **😈 HARD** chip on the loadout screen. Tourists on the banks shoot at you with **slingshots and BB guns**, and they can kill you before you reach the edge. Your corpse still floats over (it never snags on rocks) and still hits the bottom in a mess. Grab the **floating slingshot** partway down the river to fire back (F / SHOOT); it auto-aims at the nearest shooter, and they splatter too.
+
+## Secrets
+
+* **The cave behind the falls.** Only the Golden Goose can reach it: after you go over, hold ◀ to hug the cliff and glide down into the cave mouth (flap to slow down). Inside is a message from Annie. Leaving is... less dignified. (Cheat: **Show Me The Cave** marks it.)
+* Playing as **Kacey**? Someone from Canadian border services is waiting at the edge of the falls. They'd like to pet you.
 
 ## Vessels (unlock in order)
 
@@ -45,17 +56,17 @@ The Golden Goose unlocks last, after *everything* else, and you always survive w
 
 * Every attempt pays **lumens**: river pickups, skill bonuses, a survival bonus, and a gore bonus for messy deaths.
 * Each unlock gives **+15% lumen earnings** (ramping), so later unlocks come faster.
-* **Settings → Economy → TEST** (the default) makes everything cheap for testing. **NORMAL** is 6x prices.
+* **Settings → Prices → ECONOMY** (the default) makes everything cheap. **NORMAL** is 6x prices.
 
 ## Cheats (all available from the start)
 
-The cheat menu has 19 toggles: **Salmon Mode** (swim upstream and never go over... until a bear eats you in the most disgusting nature documentary ever made), Try Everything, God Mode, Always Die, Gore Galore, Explosive Impact, Explosive Diarrhea, Big Head, Tiny Mode, Moon Gravity, Bullet Time, Noodle Limbs, Disco Falls, Super Paddle, Invincible Hull, Rock Party, Lazy River, Skip to the Edge, Lumen Rain. There are also quick buttons for +500 / +5000 lumens, Unlock Everything and Reset, plus a **GO!** button on the Shop and Cheats screens that jumps straight into a run.
+The cheat menu has 22 toggles: **Salmon Mode** (swim upstream and never go over... until a bear eats you in the most disgusting nature documentary ever made), Try Everything, God Mode, Always Die, Gore Galore, Explosive Impact, Explosive Diarrhea, Big Head, Tiny Mode, Moon Gravity, Bullet Time, Noodle Limbs, Disco Falls, Super Paddle, Invincible Hull, Rock Party, Lazy River, Skip to the Edge, Lumen Rain, Lightning Magnet, Surprise Bear and Show Me The Cave. There are also quick buttons for +500 / +5000 lumens, Unlock Everything and Reset, plus a **GO!** button on the Shop and Cheats screens that jumps straight into a run.
 
-Secret codes: `SALMON`, `IDDQD`, `GOD`, `BLOODBATH`, `KABOOM`, `POOP`, `BIGHEAD`, `DISCO`, `MOON`, `MONEY`, `LUMENS`, `GOOSE`, `UNLOCKALL`, `HONK`.
+Secret codes: `SALMON`, `IDDQD`, `GOD`, `BLOODBATH`, `KABOOM`, `POOP`, `ZAP`, `BEAR`, `GRASSHOPPER`, `BIGHEAD`, `DISCO`, `MOON`, `MONEY`, `LUMENS`, `GOOSE`, `UNLOCKALL`, `HONK`.
 
 ## Gore
 
-The gore setting can be **OFF / ON / MAX** (MAX is the default). Adults get streaking blood, spurting arteries, torn stumps with bone and marrow, chunks of meat, organs and intestines, blood on the rocks, in the water and splattered across the screen. Kacey bleeds rainbow glitter. Every now and then a death is **explosive diarrhea** instead. OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
+The gore setting can be **OFF / ON / MAX** (MAX is the default). Adults get streaking blood, spurting arteries, torn stumps with bone and marrow, chunks of meat, organs and intestines, blood on the rocks, in the water and splattered across the screen. Kacey bleeds rainbow glitter. Every now and then a death is **explosive diarrhea** instead. Characters shout their (spoken) last words on the way down. OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
 
 Knocked out in the river? You come to after 5 seconds.
 

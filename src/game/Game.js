@@ -28,6 +28,7 @@ export class Game {
     this.resize();
     audio.setVolumes(cfg.settings.music, cfg.settings.sfx);
     this.phase = new River(this);
+    if (import.meta.env.DEV) window.__nobGame = this; // QA hook (dev server only)
     this.raf = requestAnimationFrame(this.loop);
   }
 
