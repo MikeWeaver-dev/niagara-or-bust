@@ -749,11 +749,19 @@ export class Splatter {
       const y = s.y * H;
       const r = s.r * m;
       ctx.fillStyle = s.color;
-      ctx.beginPath();
-      s.verts.forEach((k, i) => {
+      // smooth blobby outline through the midpoints of the jittered rim
+      const pts = s.verts.map((k, i) => {
         const a = (i / s.verts.length) * TAU;
-        ctx.lineTo(x + Math.cos(a) * r * k, y + Math.sin(a) * r * k);
+        return [x + Math.cos(a) * r * k, y + Math.sin(a) * r * k];
       });
+      ctx.beginPath();
+      const n = pts.length;
+      ctx.moveTo((pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2);
+      for (let i = 1; i <= n; i++) {
+        const p0 = pts[i % n];
+        const p1 = pts[(i + 1) % n];
+        ctx.quadraticCurveTo(p0[0], p0[1], (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2);
+      }
       ctx.closePath();
       ctx.fill();
       s.sats.forEach((t) => {

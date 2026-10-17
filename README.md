@@ -29,14 +29,14 @@ Start on the bank, pick your spot, jump in, paddle and dodge while the current d
 | Canoe (+ Gary) | 33% | POWER STROKE (dash) | "Hold on, Gary!" ring timing |
 | Hamster Ball | 42% | BOUNCE (jump) | Curl-up ring timing |
 | Jet Ski + Parachute | 34% | TURBO (smash logs) | **Deploy the chute** in the green altitude zone |
-| The Golden Goose | **100%** | FLAP (fly) + lays golden eggs | Glide down and grab golden lumens |
+| The Golden Goose | **100%** | FLAP (fly) + lays golden eggs | Glide down like royalty (flap to float, steer anywhere) |
 
 The Golden Goose unlocks last, after *everything* else, and you always survive with it.
 
 ## Characters
 
 * **Annie Edson Taylor** (1901): the first person to survive in a barrel, on her 63rd birthday. Her cat tags along.
-* **Lil' Timmy**, age 7: cartoon physics protect him. Bonks and a ghost instead of gore.
+* **Lil' Timmy**, age 7: cartoon physics protect him. Bonks and a ghost instead of gore (the only character without it).
 * **Kacey the Rainbow Giraffe**: four legs, a very long neck, and rainbow glitter gore.
 * **Bobby Leach** (1911): steel barrel. Later died after slipping on an orange peel. Watch the beach.
 * **Jean Lussier** (1928): rode a giant rubber ball with 32 inner tubes.
@@ -49,13 +49,15 @@ The Golden Goose unlocks last, after *everything* else, and you always survive w
 
 ## Cheats (all available from the start)
 
-The cheat menu has 18 toggles: **Salmon Mode** (swim upstream and never go over... until a bear eats you), Try Everything, God Mode, Always Die, Gore Galore, Explosive Impact, Big Head, Tiny Mode, Moon Gravity, Bullet Time, Noodle Limbs, Disco Falls, Super Paddle, Invincible Hull, Rock Party, Lazy River, Skip to the Edge, Lumen Rain. There are also quick buttons for +500 / +5000 lumens, Unlock Everything and Reset.
+The cheat menu has 19 toggles: **Salmon Mode** (swim upstream and never go over... until a bear eats you in the most disgusting nature documentary ever made), Try Everything, God Mode, Always Die, Gore Galore, Explosive Impact, Explosive Diarrhea, Big Head, Tiny Mode, Moon Gravity, Bullet Time, Noodle Limbs, Disco Falls, Super Paddle, Invincible Hull, Rock Party, Lazy River, Skip to the Edge, Lumen Rain. There are also quick buttons for +500 / +5000 lumens, Unlock Everything and Reset, plus a **GO!** button on the Shop and Cheats screens that jumps straight into a run.
 
-Secret codes: `SALMON`, `IDDQD`, `GOD`, `BLOODBATH`, `KABOOM`, `BIGHEAD`, `DISCO`, `MOON`, `MONEY`, `LUMENS`, `GOOSE`, `UNLOCKALL`, `HONK`.
+Secret codes: `SALMON`, `IDDQD`, `GOD`, `BLOODBATH`, `KABOOM`, `POOP`, `BIGHEAD`, `DISCO`, `MOON`, `MONEY`, `LUMENS`, `GOOSE`, `UNLOCKALL`, `HONK`.
 
 ## Gore
 
-The gore setting can be **OFF / ON / MAX** (MAX is the default). OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
+The gore setting can be **OFF / ON / MAX** (MAX is the default). Adults get streaking blood, spurting arteries, torn stumps with bone and marrow, chunks of meat, organs and intestines, blood on the rocks, in the water and splattered across the screen. Kacey bleeds rainbow glitter. Every now and then a death is **explosive diarrhea** instead. OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
+
+Knocked out in the river? You come to after 5 seconds.
 
 ## Tech
 

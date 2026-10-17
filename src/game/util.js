@@ -34,14 +34,22 @@ export function segDist(px, py, ax, ay, bx, by) {
   return { d: Math.hypot(px - cx, py - cy), t, cx, cy };
 }
 
-export function shade(hex, amt) {
-  // amt -1..1 darken/lighten
-  let c = hex.replace('#', '');
-  if (c.length === 3) c = c.split('').map((x) => x + x).join('');
-  const n = parseInt(c, 16);
-  let r = (n >> 16) & 255;
-  let g = (n >> 8) & 255;
-  let b = n & 255;
+export function shade(color, amt) {
+  // amt -1..1 darken/lighten; accepts #rgb, #rrggbb or rgb()/rgba() strings
+  let r;
+  let g;
+  let b;
+  const m = /^rgba?\(([^)]+)\)/.exec(color);
+  if (m) {
+    [r, g, b] = m[1].split(',').map((v) => parseFloat(v));
+  } else {
+    let c = color.replace('#', '');
+    if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+    const n = parseInt(c, 16);
+    r = (n >> 16) & 255;
+    g = (n >> 8) & 255;
+    b = n & 255;
+  }
   if (amt < 0) {
     r *= 1 + amt;
     g *= 1 + amt;

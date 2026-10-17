@@ -256,7 +256,7 @@ export class Drop {
       }
       const sub = clamp((p.y - POOL_Y) / 0.5, 0, 1.6);
       const isBody = this.riderSet.has(p) || (this.gary && this.gary.pts.includes(p));
-      p.ay -= g * 1.25 * sub * (isBody ? Math.max(1.55, p.buoy) : p.buoy) * (this.sinkT > 0 && isBody ? 0.35 : 1);
+      p.ay -= g * 1.25 * sub * (isBody ? Math.max(2.0, p.buoy) : p.buoy) * (this.sinkT > 0 && isBody ? 0.35 : 1);
       const k = Math.min(0.95, 6 * dt * sub);
       const vx = (p.x - p.px) / dt;
       const nvx = vx * (1 - k) + 0.9 * k * 0.5;
