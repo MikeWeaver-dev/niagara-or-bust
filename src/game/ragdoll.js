@@ -405,6 +405,24 @@ function drawHumanRag(ctx, rag, lw, t) {
     ctx.strokeStyle = SOFT;
     ctx.lineWidth = lw;
     ctx.stroke();
+    const inflate = rag.opts.lifejacket ? rag.opts.inflate || 0 : 0;
+    if (inflate > 0.02) {
+      const r = (0.16 + inflate * 0.22) * s;
+      const g = ctx.createRadialGradient(P.chest.x - r * 0.3, P.chest.y - r * 0.3, r * 0.1, P.chest.x, P.chest.y, r);
+      g.addColorStop(0, '#ffb070');
+      g.addColorStop(1, '#ff6a00');
+      ctx.fillStyle = g;
+      ctx.strokeStyle = SOFT;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.ellipse(P.chest.x, P.chest.y + 0.05 * s, r, r * 1.1, 0, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(P.chest.x - r * 0.35, P.chest.y - r * 0.3, r * 0.3, r * 0.15, -0.5, 0, TAU);
+      ctx.fill();
+    }
     if (ch.id === 'bobby') {
       ctx.strokeStyle = '#2a1d16';
       ctx.lineWidth = 0.05 * s;

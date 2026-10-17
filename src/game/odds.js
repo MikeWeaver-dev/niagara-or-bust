@@ -25,8 +25,8 @@ export function computeOdds({ craft, hpRatio = 1, wrecked = false, ko = false, l
   if (cheats.alwaysDie) return 0;
   if (craft.alwaysSurvive && !wrecked) return 1;
   let p = (wrecked ? 0.11 : craft.base) + LANE_BONUS[lane] - (1 - clamp(hpRatio, 0, 1)) * 0.18 + speedBonus(speed) + bonus;
-  if (ko) p = Math.min(p, 0.06);
-  return clamp(p, 0.04, 0.92);
+  if (ko) p = Math.min(p, 0.07);
+  return clamp(p, 0.07, 0.92);
 }
 
 export const oddsColor = (p) => (p >= 0.55 ? '#5dff8a' : p >= 0.3 ? '#ffd23b' : '#ff5a5a');

@@ -47,6 +47,16 @@ export const GORE = {
     gut: ['#d9a38c', '#c98a7a', '#e8b8a0'],
   },
 };
+GORE.vomit = {
+  drops: ['#a8c040', '#c8d860', '#8aa02a', '#d8c858'],
+  bright: '#c8d860',
+  meat: ['#d8c858', '#e8a050', '#c86a3a'],
+  fat: '#f0e090',
+  cloud: 'rgba(160,180,60,0.45)',
+  decal: ['rgba(150,170,50,0.9)'],
+  organ: ['#8aa02a'],
+  gut: ['#a8c040'],
+};
 export const goreOf = (style) => GORE[style] || GORE.blood;
 
 const shapeVerts = (n, jitter) => Array.from({ length: n }, () => 1 - jitter + Math.random() * jitter * 2);
@@ -169,7 +179,7 @@ export class FX {
     const base = Math.atan2(dirY, dirX);
     for (let i = 0; i < n; i++) {
       const v = this.vel(rand(3, 8), base + rand(-0.35, 0.35), 1, 4);
-      this.add({ x, y, z, ...v, life: rand(0.8, 1.5), size: rand(0.04, 0.1), color: pick(['#a8c040', '#c8d860', '#8aa02a', '#d8c858', '#b0a040']), kind: Math.random() < 0.3 ? 'meat' : 'blood', drag: 0.25 });
+      this.add({ x, y, z, ...v, life: rand(0.8, 1.5), size: rand(0.04, 0.1), color: pick(['#a8c040', '#c8d860', '#8aa02a', '#d8c858', '#b0a040']), kind: Math.random() < 0.3 ? 'meat' : 'blood', drag: 0.25, style: 'vomit', fat: '#f0e090' });
     }
   }
 
@@ -228,9 +238,9 @@ export class FX {
     }
   }
 
-  feathers(x, y, n = 6) {
+  feathers(x, y, n = 6, colors = null, size = 1) {
     for (let i = 0; i < n; i++) {
-      this.add({ x, y, z: 1, vx: rand(-3, 3), vy: rand(-3, 0), vz: rand(1, 3), life: rand(1.5, 3), size: rand(0.18, 0.3), color: pick(['#ffd84d', '#ffe98a', '#f2b81c']), kind: 'feather', grav: 0.08, drag: 2 });
+      this.add({ x, y, z: 1, vx: rand(-3, 3), vy: rand(-3, 0), vz: rand(1, 3), life: rand(1.5, 3), size: rand(0.18, 0.3) * size, color: pick(colors || ['#ffd84d', '#ffe98a', '#f2b81c']), kind: 'feather', grav: 0.08, drag: 2 });
     }
   }
 

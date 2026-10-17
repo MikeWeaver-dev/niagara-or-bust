@@ -11,10 +11,12 @@ import * as art from './dropArt.js';
 import { POOL_Y, LIP_DEPTH, cliffX } from './dropArt.js';
 import { clamp, lerp, rand, pick, approach, bigText, TAU, easeOutBack, roundRect } from './util.js';
 import { computeOdds, oddsColor, LANE_NAME } from './odds.js';
-import { drawButton, pill } from './hud.js';
+import { drawButton, pill, bar } from './hud.js';
 import { RAINBOW } from '../data/characters.js';
 
-const RING_LABEL = { pencil: 'POINT YOUR TOES!', tuck: 'TUCK!', brace: 'BRACE!', gary: 'HOLD ON, GARY!', curl: 'CURL UP!', boof: 'BOOF!' };
+const RING_LABEL = { pencil: 'POINT YOUR TOES!', boof: 'BOOF!' };
+const MINI_MODES = ['inflate', 'mash', 'rhythm', 'aim'];
+const JOY_MODES = ['boof', 'surf', 'glide', 'aim'];
 const RING_BONUS = { perfect: 0.18, good: 0.09, ok: 0.03, miss: -0.05 };
 const DECIDE_Y = 33;
 
@@ -37,7 +39,6 @@ export class Drop {
     this.skillLumens = 0;
     this.emitters = [];
     this.breakQueue = [];
-    this.orbs = [];
     this.flags = {};
     this.goreStyle = settings.gore === 'off' || character.gore === 'cartoon' ? 'cartoon' : character.gore;
     // every now and then (or always, with the cheat) the blood is... not blood
@@ -56,12 +57,14 @@ export class Drop {
     this.flowV = clamp(info.speed, 4, 13) * 0.95;
     this.setupBodies();
     this.cam = { x: -4, y: -0.5, S: this.baseScale(9) };
-    this.boatX = 34;
+    this.boatX = 46;
 
     music.play(craft.id === 'goose' && !info.wrecked ? 'goose' : 'drop');
     audio.stopLoop('river');
     audio.setLoop('falls', 0.45, 700);
     this.mini = { ring: null, ringDone: false, surf: null, chute: null, kayakZone: 0, kayakTotal: 0 };
+    // the left-side joystick is only needed by drops you steer; elsewhere any tap is the action button
+    game.input.joyEnabled = JOY_MODES.includes(this.dropMode);
   }
 
   baseScale(metres) {
@@ -316,7 +319,7 @@ export class Drop {
     if (this.isTracked(p) || this.riderSet.has(p) || this.bodyPts.includes(p)) {
       if (this.stage !== 'after' && (this.isTracked(p) || speed > 12)) this.onImpact('rock', p, speed, rock);
       else if (this.stage === 'after' && this.outcome && !this.outcome.survived && this.riderSet.has(p) && speed > 9) {
-        this.fx.blood(p.x, p.y, -(p.x - rock.x), -(p.y - rock.y), 0.4, this.goreStyle);
+        this.fx.blood(p.x, p.y, -(p.x - rock.x), -(p.y - rock.y), 0.4, this.rider.goreStyle);
         audio.thud();
       }
     }
@@ -654,6 +657,8 @@ export class Drop {
     }
     this.fx.update(dt);
     this.splat.update(dt);
+    if (this.bonusLabel) this.bonusLabel.t -= dt;
+    if (this.cheats.slowmo && this.stage === 'fall' && this.g.timeScale === 1) this.g.setTimeScale(0.4, 99);
     this.updateCamera(dt);
   }
 
@@ -692,6 +697,11 @@ export class Drop {
         this.body.pts[i].x -= nx * torque;
         this.body.pts[i].y -= ny * torque;
       });
+    }
+    // hamster ball: rock your weight to roll toward the deep water
+    if (this.dropMode === 'aim' && falling && this.ball && !this.mini.done && !this.ballPopped) {
+      const ax = inp.axisX();
+      [this.ball.hub, ...this.ball.rim, ...this.rider.pts].forEach((p) => (p.ax += ax * 13));
     }
     // surfing the face of the falls (kinematic board)
     const S = this.mini.surf;
@@ -748,7 +758,7 @@ export class Drop {
         const pts = [...this.body.pts, ...this.rider.pts];
         pts.forEach((p) => {
           p.ay -= this.phys.gravity * lift;
-          p.ax += ax * 10 + (this.stage === 'fall' ? 2.5 : 0);
+          p.ax += ax * 10 + (this.stage === 'fall' ? 1.2 : 0);
           const vy = (p.y - p.py) / h;
           if (vy > maxVy) p.py = p.y - maxVy * h;
         });
@@ -786,6 +796,7 @@ export class Drop {
     const mode = this.dropMode;
     if (this.stage === 'approach') {
       this.rider.expr = this.info.ko ? 'ko' : 'terrified';
+      if (this.stageT > 6) this.flowV += dt * 6; // never get stuck before the lip
       if (c.x > 0.2) {
         this.stage = 'fall';
         this.stageT = 0;
@@ -823,6 +834,7 @@ export class Drop {
           else if (R.t > R.dur * 1.3) this.resolveRing(9);
         }
       }
+      if (MINI_MODES.includes(mode) && !this.info.ko && !this.outcome) this.updateMinis(dt, inp, c, mode);
       if (mode === 'boof' && this.body && !this.outcome) {
         let a = this.body.angle;
         if (a > Math.PI) a -= TAU;
@@ -853,7 +865,7 @@ export class Drop {
       if (mode === 'glide') ready = true;
       else if (mode === 'surf') ready = (S && !S.riding && this.stageT > 0.3) || c.y > 40;
       else if (mode === 'chute') ready = (C && C.deployed && C.decideAt !== undefined && this.t > C.decideAt) || c.y > 38;
-      else if (ringMode) ready = (this.mini.ringDone && c.y > DECIDE_Y - 6) || c.y > DECIDE_Y + 4 || this.info.ko;
+      else if (ringMode || MINI_MODES.includes(mode)) ready = ((this.mini.ringDone || this.mini.done) && c.y > DECIDE_Y - 6) || c.y > DECIDE_Y + 4 || this.info.ko;
       else ready = c.y > DECIDE_Y;
       if (ready && !this.outcome) {
         if (mode === 'boof') {
@@ -876,7 +888,7 @@ export class Drop {
         this.survivor = { x: this.impact.x + 0.5, t: 0 };
         this.rider.hidden = true;
         if (this.gary) this.gary.hidden = true;
-        if (this.body && this.craftId !== 'goose') this.vesselFloat = { id: this.craftId, x: this.impact.x + 2.2 };
+        if ((this.body || this.ball) && this.craftId !== 'goose') this.vesselFloat = { id: this.craftId, x: this.impact.x + 2.2 };
         audio.splash(0.6);
         audio.yay(this.ch.voice || 1);
         audio.fanfare();
@@ -913,6 +925,115 @@ export class Drop {
         this.finish();
       }
     }
+  }
+
+  // ---- per-vessel drop mini-games
+  updateMinis(dt, inp, c, mode) {
+    const M = this.mini;
+    if (M.done) return;
+    if (mode === 'inflate') {
+      // Life jacket: hold to inflate, let go in the green, don't pop it
+      if (!M.inf) {
+        if (this.stageT < 0.25) return;
+        M.inf = { m: 0, started: false };
+        this.g.setTimeScale(0.5, 6);
+      }
+      const I = M.inf;
+      if (inp.isDown('primary')) {
+        I.started = true;
+        I.m += dt * 0.62;
+        if (Math.random() < 0.35) audio.tone({ type: 'sine', f: 260 + I.m * 520, dur: 0.05, gain: 0.05 });
+      }
+      this.rider.opts.inflate = I.m;
+      if (I.m > 1.0) {
+        audio.pop();
+        this.fx.debris(c.x, c.y, '#ff7a1a', 10, 0.15, 0, 'shard');
+        this.rider.opts.inflate = 0;
+        this.rider.opts.lifejacket = false;
+        this.finishMini(-0.08, 'POPPED IT!', 0);
+      } else if (I.started && !inp.isDown('primary')) {
+        audio.whoosh(0.3);
+        if (I.m >= 0.65 && I.m <= 0.9) this.finishMini(0.18, 'PERFECTLY PUFFED!', 5);
+        else if (I.m >= 0.45) this.finishMini(0.09, 'PUFFY ENOUGH', 3);
+        else this.finishMini(0.02, 'BARELY INFLATED', 1);
+      } else if (c.y > DECIDE_Y - 2) this.finishMini(-0.05, 'FORGOT TO INFLATE', 0);
+    } else if (mode === 'mash') {
+      // Barrel: mash to stuff it full of pillows before impact
+      if (!M.mash) {
+        if (this.stageT < 0.25) return;
+        M.mash = { n: 0, t: 0, dur: 1.5 };
+        this.g.setTimeScale(0.5, 6);
+      }
+      const B = M.mash;
+      B.t += dt;
+      if (inp.pressed('primary')) {
+        B.n++;
+        audio.squish();
+        this.fx.feathers(c.x, c.y, 3, ['#ffffff', '#f2f2f8', '#e8e8f0'], 0.45);
+        if (B.n % 4 === 0) this.fx.text(['FLUFF!', 'PILLOW!', 'CUSHION!', 'DUVET!'][(B.n / 4) % 4], c.x + rand(-1, 1), c.y - 1, '#fff', 18, 0, 0.7);
+      }
+      if (B.t >= B.dur || c.y > DECIDE_Y - 2) {
+        this.finishMini(Math.min(0.2, B.n * 0.0125), B.n >= 16 ? 'FULLY PADDED!' : B.n >= 8 ? 'SOME PILLOWS' : 'ONE SAD PILLOW', Math.min(5, Math.floor(B.n / 3)));
+      }
+    } else if (mode === 'rhythm') {
+      // Canoe: air-paddle left / right in time with Gary
+      if (!M.rh) {
+        if (this.stageT < 0.25) return;
+        M.rh = { t: 0, beats: [0, 1, 2, 3, 4, 5].map((i) => ({ at: 0.45 + i * 0.32, dir: i % 2 ? 'right' : 'left', res: null })), i: 0, hits: 0 };
+        this.g.setTimeScale(0.5, 6);
+      }
+      const R = M.rh;
+      R.t += dt;
+      const b = R.beats[R.i];
+      if (b) {
+        const pl = inp.pressed('left');
+        const pr = inp.pressed('right');
+        if (pl || pr) {
+          const dir = pl ? 'left' : 'right';
+          if (dir === b.dir && Math.abs(R.t - b.at) < 0.22) {
+            b.res = 'hit';
+            R.hits++;
+            audio.paddle();
+            this.fx.splash(c.x + (dir === 'left' ? -1.2 : 1.2), c.y, 0.25);
+          } else {
+            b.res = 'miss';
+            audio.denied();
+            if (this.gary) this.fx.text('GARY: "OTHER SIDE!"', c.x + 1, c.y - 1.5, '#9ef', 16, 0, 1);
+          }
+          R.i++;
+        } else if (R.t > b.at + 0.22) {
+          b.res = 'miss';
+          R.i++;
+        }
+      }
+      if (R.i >= R.beats.length || c.y > DECIDE_Y - 2) {
+        const frac = R.hits / R.beats.length;
+        this.finishMini(frac * 0.2 - (frac < 0.3 ? 0.05 : 0), frac > 0.8 ? 'IN SYNC WITH GARY!' : frac > 0.4 ? 'GARY IS CONFUSED' : 'TOTAL CHAOS', Math.round(frac * 5));
+      }
+    } else if (mode === 'aim') {
+      // Hamster ball: roll your landing into the deep-water zone
+      if (!M.aim) {
+        if (this.stageT < 0.15) return;
+        const land = this.predictLanding().x;
+        M.aim = { zx: land + (Math.random() < 0.5 ? -1 : 1) * rand(3, 6), w: 3.2, land };
+      }
+      M.aim.land = this.predictLanding().x;
+      if (c.y > DECIDE_Y - 1) {
+        const d = Math.abs(M.aim.land - M.aim.zx);
+        if (d < M.aim.w / 2) this.finishMini(0.18, 'BULLSEYE! DEEP WATER', 5);
+        else if (d < M.aim.w / 2 + 2) this.finishMini(0.08, 'CLOSE ENOUGH', 2);
+        else this.finishMini(-0.05, 'MISSED THE DEEP END', 0);
+      }
+    }
+  }
+
+  finishMini(b, label, lumens) {
+    this.mini.done = true;
+    this.mini.ringDone = true;
+    this.addBonus(b, label, lumens);
+    this.g.setTimeScale(1, 0);
+    if (b > 0.08) audio.pickup(1.4);
+    else if (b < 0) audio.denied();
   }
 
   resolveRing(k) {
@@ -1011,13 +1132,6 @@ export class Drop {
     this.rider.expr = C.snagged ? 'terrified' : 'happy';
   }
 
-  spawnSkyOrbs() {
-    const c = this.core();
-    for (let i = 0; i < 12; i++) {
-      this.orbs.push({ x: c.x + 3 + i * 1.6 + rand(-1, 1), y: 6 + i * 3.6 + rand(-1, 1), got: false });
-    }
-  }
-
   finish() {
     const O = this.outcome;
     const info = this.info;
@@ -1029,7 +1143,6 @@ export class Drop {
       ['Made it to the edge', 8],
     ];
     if (this.skillLumens) breakdown.push(['Skill bonus', this.skillLumens]);
-    if (this.orbLumens) breakdown.push(['Sky lumens', this.orbLumens]);
     if (O.survived) breakdown.push(['SURVIVAL BONUS', 10 + 4 * this.craft.tier]);
     if (gore) breakdown.push(['Gore bonus', gore]);
     const total = breakdown.reduce((a, [, n]) => a + n, 0);
@@ -1068,20 +1181,6 @@ export class Drop {
     this.cam.x = approach(this.cam.x, tx, this.stage === 'after' ? 3 : 6, dt);
     this.cam.y = approach(this.cam.y, ty, this.stage === 'after' ? 3 : 7, dt);
     this.cam.S = approach(this.cam.S, S, 2.5, dt);
-    // goose orbs collection here (needs camera-independent check)
-    if (this.orbs.length) {
-      const pts = this.body ? [this.body.pts[1], this.rider.P.head || this.rider.P.n2] : [c];
-      this.orbs.forEach((o) => {
-        if (o.got) return;
-        if (pts.some((p) => p && Math.hypot(p.x - o.x, p.y - o.y) < 1.4)) {
-          o.got = true;
-          this.orbLumens = (this.orbLumens || 0) + 2;
-          audio.bigPickup();
-          this.fx.sparkles(o.x, o.y, 12);
-          this.fx.text('+2', o.x, o.y, '#ffd23b', 24, 0, 0.8);
-        }
-      });
-    }
   }
 
   // ------------------------------------------------------------ render
@@ -1111,25 +1210,21 @@ export class Drop {
     art.drawBoat(ctx, this.boatX, this.t, lw, this.flags.survived || this.flags.gooseCheer);
     art.drawMistPuffs(ctx, this.t, this.cam.x, this.cam.y, this.stage === 'after' ? 0.9 : 0.6);
     art.drawRocks(ctx, this.rocks, lw);
-    // sky orbs (goose)
-    this.orbs.forEach((o) => {
-      if (o.got) return;
-      const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, 0.9);
-      g.addColorStop(0, 'rgba(255,220,80,0.9)');
-      g.addColorStop(1, 'rgba(255,220,80,0)');
-      ctx.fillStyle = g;
+    if (this.mini.aim && !this.outcome) {
+      const A = this.mini.aim;
+      ctx.fillStyle = 'rgba(40,230,120,0.32)';
+      ctx.fillRect(A.zx - A.w / 2, POOL_Y - 0.25, A.w, 0.5);
+      ctx.strokeStyle = '#2bff88';
+      ctx.lineWidth = lw * 2;
+      ctx.strokeRect(A.zx - A.w / 2, POOL_Y - 0.25, A.w, 0.5);
+      ctx.fillStyle = '#ff3b5c';
+      ctx.fillRect(A.zx - 0.04, POOL_Y - 1.4, 0.08, 1.2);
       ctx.beginPath();
-      ctx.arc(o.x, o.y, 0.9, 0, TAU);
+      ctx.moveTo(A.zx + 0.04, POOL_Y - 1.4);
+      ctx.lineTo(A.zx + 0.6, POOL_Y - 1.2);
+      ctx.lineTo(A.zx + 0.04, POOL_Y - 1.0);
       ctx.fill();
-      ctx.fillStyle = '#ffd23b';
-      ctx.strokeStyle = '#a07000';
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, 0.35, 0, TAU);
-      ctx.fill();
-      ctx.stroke();
-    });
-
+    }
     ctx.restore();
     this.fx.render(ctx, proj, 'back');
     world();
@@ -1226,7 +1321,7 @@ export class Drop {
     if (!this.hideRider) drawRagdoll(ctx, this.rider, lw, t);
     if (behind) drawVessel();
     // hamster ball shell over the rider
-    if (this.ball && !this.ballPopped) {
+    if (this.ball && !this.ballPopped && !this.survivor) {
       const B = this.ball;
       ctx.fillStyle = 'rgba(190,235,255,0.25)';
       ctx.strokeStyle = 'rgba(30,70,100,0.9)';
@@ -1302,6 +1397,98 @@ export class Drop {
     }
   }
 
+  drawMiniUI(ctx, cp, touch, btnR) {
+    const { W, H } = this.g;
+    const t = this.t;
+    const M = this.mini;
+    const mode = this.dropMode;
+    const head = Math.min(30, W * 0.06);
+    const sub = Math.min(17, W * 0.038);
+    const btns = [];
+    if (mode === 'inflate') {
+      const m = M.inf ? M.inf.m : 0;
+      bigText(ctx, 'INFLATE THE VEST!', W / 2, H * 0.2, head, '#ff9a3b');
+      bigText(ctx, touch ? 'HOLD THE BUTTON, LET GO IN THE GREEN' : 'HOLD SPACE, LET GO IN THE GREEN', W / 2, H * 0.2 + 30, sub, '#fff');
+      const gx = Math.min(W - 60, cp.x + 90);
+      const gy0 = cp.y - 90;
+      const gh = 180;
+      const y = (v) => gy0 + gh - v * gh;
+      ctx.fillStyle = 'rgba(10,15,40,0.7)';
+      roundRect(ctx, gx - 14, gy0 - 4, 28, gh + 8, 10);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(93,255,138,0.85)';
+      ctx.fillRect(gx - 10, y(0.9), 20, y(0.65) - y(0.9));
+      ctx.fillStyle = 'rgba(255,90,90,0.85)';
+      ctx.fillRect(gx - 10, y(1.0), 20, y(0.95) - y(1.0) + 2);
+      ctx.fillStyle = '#ff7a1a';
+      ctx.fillRect(gx - 6, y(Math.min(1, m)), 12, y(0) - y(Math.min(1, m)));
+      bigText(ctx, 'PSI', gx, gy0 - 16, 13);
+      if (touch) btns.push({ id: 'inflate', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'INFLATE', action: 'primary' });
+    } else if (mode === 'mash') {
+      const B = M.mash || { n: 0, t: 0, dur: 1.5 };
+      bigText(ctx, 'PAD THE BARREL! MASH!', W / 2, H * 0.2, head, '#ffd23b');
+      bigText(ctx, touch ? 'TAP TAP TAP TAP TAP' : 'MASH SPACE AS FAST AS YOU CAN', W / 2, H * 0.2 + 30, sub, '#fff');
+      const bw = Math.min(W * 0.6, 320);
+      bar(ctx, W / 2 - bw / 2, H * 0.74, bw, 22, Math.min(1, B.n / 16), '#ffd23b', `PILLOWS: ${B.n}`);
+      bar(ctx, W / 2 - bw / 2, H * 0.74 + 30, bw, 10, 1 - B.t / B.dur, '#ff5a5a');
+      if (touch) btns.push({ id: 'mash', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'MASH!', action: 'primary' });
+    } else if (mode === 'rhythm') {
+      const Rh = M.rh;
+      bigText(ctx, 'AIR PADDLE WITH GARY!', W / 2, H * 0.2, head, '#5dffd0');
+      bigText(ctx, touch ? 'HIT ◀ / ▶ WHEN THEY LIGHT UP' : 'PRESS ◀ / ▶ WHEN THEY LIGHT UP', W / 2, H * 0.2 + 30, sub, '#fff');
+      if (Rh) {
+        const n = Rh.beats.length;
+        const gap = Math.min(64, (W - 40) / n);
+        Rh.beats.forEach((b, i) => {
+          const x = W / 2 + (i - (n - 1) / 2) * gap;
+          const yy = H * 0.72;
+          const current = i === Rh.i;
+          const near = current && Math.abs(Rh.t - b.at) < 0.22;
+          ctx.fillStyle = b.res === 'hit' ? '#2bd673' : b.res === 'miss' ? '#ff5a5a' : near ? '#ffffff' : current ? '#ffd23b' : 'rgba(10,15,40,0.7)';
+          ctx.strokeStyle = '#1a1030';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, yy, gap * 0.38, 0, TAU);
+          ctx.fill();
+          ctx.stroke();
+          bigText(ctx, b.dir === 'left' ? '◀' : '▶', x, yy + 1, gap * 0.4, b.res || near ? '#1a1030' : '#fff');
+        });
+      }
+      if (touch) {
+        btns.push({ id: 'pl', x: btnR + 18, y: H - btnR - 70, r: btnR, label: '◀', action: 'left' });
+        btns.push({ id: 'pr', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: '▶', action: 'right' });
+      }
+    } else if (mode === 'aim') {
+      const A = M.aim;
+      bigText(ctx, 'ROLL INTO THE DEEP WATER!', W / 2, H * 0.2, head, '#5dff8a');
+      bigText(ctx, touch ? 'DRAG ◀ ▶ TO STEER YOUR LANDING' : '◀ ▶ TO STEER YOUR LANDING', W / 2, H * 0.2 + 30, sub, '#fff');
+      if (A) {
+        const bw = Math.min(W * 0.75, 380);
+        const bx = W / 2 - bw / 2;
+        const by = H * 0.76;
+        const span = 20;
+        const px = (x) => bx + clamp((x - (A.zx - span / 2)) / span, 0, 1) * bw;
+        ctx.fillStyle = 'rgba(10,15,40,0.7)';
+        roundRect(ctx, bx, by, bw, 22, 11);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(93,255,138,0.85)';
+        ctx.fillRect(px(A.zx - A.w / 2), by + 3, px(A.zx + A.w / 2) - px(A.zx - A.w / 2), 16);
+        const lx = px(A.land);
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#1a1030';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(lx, by + 11, 10, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        bigText(ctx, 'YOU', lx, by - 14, 12);
+        bigText(ctx, 'DEEP', px(A.zx), by + 38, 12, '#5dff8a');
+      }
+    }
+    this.g.input.setButtons(btns);
+    btns.forEach((b) => drawButton(ctx, b, { color: b.action === 'primary' ? '#ff8a1f' : '#2bb6ff', pulse: Math.sin(t * 8) }));
+  }
+
   drawOverlay(ctx, proj) {
     const { W, H } = this.g;
     const t = this.t;
@@ -1318,7 +1505,6 @@ export class Drop {
     bigText(ctx, `ODDS ${Math.round(odds * 100)}%`, W / 2, 27, 22, oddsColor(odds));
     if (!this.outcome || this.stage !== 'after') bigText(ctx, `${LANE_NAME[this.info.lane]}${this.info.wrecked ? ' · NO VESSEL' : ''}`, W / 2, 55, 13, '#cfefff');
     if (this.bonusLabel && this.bonusLabel.t > 0) {
-      this.bonusLabel.t -= 1 / 60;
       bigText(ctx, this.bonusLabel.text, W / 2, 84, 22, this.bonusLabel.color);
     }
     const c = this.core();
@@ -1438,6 +1624,8 @@ export class Drop {
       const btn = { id: 'ring', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'TAP!', action: 'primary' };
       this.g.input.setButtons([btn]);
       drawButton(ctx, btn, { color: '#2bb673', pulse: Math.sin(t * 8) });
+    } else if (MINI_MODES.includes(mode) && this.stage === 'fall' && !this.mini.done && !this.info.ko) {
+      this.drawMiniUI(ctx, cp, touch, btnR);
     } else if (mode === 'glide' && this.stage === 'fall') {
       bigText(ctx, touch ? 'HOLD FLAP TO FLOAT · DRAG TO STEER' : 'SPACE / ▲ FLAP · ◀ ▶ STEER', W / 2, H * 0.2, Math.min(20, W * 0.042), '#ffd23b');
       bigText(ctx, 'THE GOOSE HAS YOU. RELAX.', W / 2, H * 0.2 + 26, 15, '#fff');

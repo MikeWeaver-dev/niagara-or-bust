@@ -51,7 +51,7 @@ function Loadout({ onStart }) {
   return (
     <>
       <MenuBackground />
-      <div className="screen">
+      <div className="screen loadout-screen">
         <div className="wrap loadout">
           <TopBar title="CHOOSE YOUR DOOM" />
           <div>
@@ -143,7 +143,7 @@ function GameView({ onLoadout, onAgain }) {
         const mult = lumenMultiplier(st);
         const lumens = Math.max(1, Math.round(r.lumensBase * mult));
         const [headline, sub] = r.survived
-          ? surviveMessage({ character: cfg.character.id, craft: cfg.craft.id })
+          ? surviveMessage({ character: cfg.character.id, craft: r.wrecked ? 'nothing' : cfg.craft.id })
           : deathMessage({ cause: r.cause, character: cfg.character.id, craft: r.salmon ? 'salmon' : cfg.craft.id, wrecked: r.wrecked, poop: r.poop });
         recordRun({ ...r, lumens });
         // what can we afford now?
@@ -230,12 +230,13 @@ function GameView({ onLoadout, onAgain }) {
 function Results({ r, onAgain, onLoadout, onShop, onMenu }) {
   useEffect(() => {
     const onKey = (e) => {
+      if (e.repeat) return;
       if (e.code === 'Enter' || e.code === 'Space') {
         e.preventDefault();
         onAgain();
       }
     };
-    const t = setTimeout(() => window.addEventListener('keydown', onKey), 600);
+    const t = setTimeout(() => window.addEventListener('keydown', onKey), 1500);
     return () => {
       clearTimeout(t);
       window.removeEventListener('keydown', onKey);

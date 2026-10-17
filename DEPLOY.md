@@ -51,4 +51,6 @@ npm install
 npm run play       # builds, then serves on port 5173 on your local network
 ```
 
-Vite prints a **Network** address like `http://192.168.x.x:5173/game/`. Friends on the same Wi-Fi (or the same phone hotspot) open that on their phones in Chrome. If Windows asks whether to allow Node.js through the firewall, click **Allow** for private networks.
+Vite prints a **Network** address like `http://192.168.x.x:5173/game/` (include the trailing slash; Firebase handles `/game` without it via the rewrite above). Friends on the same Wi-Fi (or the same phone hotspot) open that on their phones in Chrome. If Windows asks whether to allow Node.js through the firewall, click **Allow** for private networks.
+
+Note: the Kids Table site's own dev server also defaults to port 5173, so don't run both at once (or change one port).

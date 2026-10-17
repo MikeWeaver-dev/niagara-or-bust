@@ -1337,17 +1337,83 @@ export class River {
     if (this.salmon) {
       drawSalmonTop(ctx, S * 1.1, t);
     } else if (this.mode === 'bank' || (this.mode === 'entering' && this.modeT < 0.5)) {
-      // walking on the beach with the vessel beside you
+      // on the beach, every vessel gets hauled to the water its own way
       const id = this.craft.id;
       const side = p.x > RW - 3 ? -1 : 1;
-      if (id !== 'nothing' && id !== 'lifejacket') {
+      const walk = p.walking ? 1 : 0;
+      const step = Math.sin(t * 9) * walk;
+      const slipRot = p.slip > 0 ? -1.4 * Math.min(1, (1.3 - p.slip) * 4) : 0;
+      const pose = p.walking ? 'walk' : p.slip > 0 ? 'flail' : 'wave';
+      const expr = p.slip > 0 ? 'hurt' : 'happy';
+      const me = (extra = {}) => drawUpright(ctx, ch, occS, { ...charOpts, pose, expr, lifejacket: id === 'lifejacket', ...extra });
+      const vessel = (dx, dy, rot, scale = 0.75, extra = {}) => {
         ctx.save();
-        ctx.translate(side * S * 1.6, S * 0.2);
-        drawCraftTop(ctx, id, S * 0.75, { t: 0, dry: true, occupant: null, passenger: id === 'canoe' ? (c) => drawUpright(c, GARY, occS * 0.75, { pose: 'wave', expr: 'happy', t: t + 1 }) : null });
+        ctx.translate(dx, dy);
+        ctx.rotate(rot);
+        drawCraftTop(ctx, id, S * scale, { t: 0, dry: true, occupant: null, ...extra });
         ctx.restore();
+      };
+      ctx.rotate(slipRot);
+      switch (id) {
+        case 'barrel':
+          // rolled along beside you, tumbling as it goes
+          vessel(side * S * 1.5, S * 0.15, p.x * 1.6);
+          me();
+          break;
+        case 'hamster':
+          // you are already inside, hamster-wheeling across the sand
+          ctx.save();
+          ctx.rotate(step * 0.08);
+          drawCraftTop(ctx, 'hamster', S * 0.9, { t: t * walk, dry: true, occupant: (c) => drawUpright(c, ch, occS * 0.85, { ...charOpts, pose: p.walking ? 'run' : 'stand', expr }) });
+          ctx.restore();
+          break;
+        case 'kayak':
+        case 'surfboard':
+          // hoisted overhead
+          me({ pose: p.slip > 0 ? 'flail' : 'cheer' });
+          vessel(0, -S * 1.85 + Math.abs(step) * S * 0.05, Math.PI / 2 + step * 0.04, 0.6);
+          break;
+        case 'canoe':
+          // you and Gary each carry an end
+          vessel(side * S * 1.3, -S * 0.9, Math.PI / 2 + step * 0.03, 0.55);
+          ctx.save();
+          ctx.translate(side * S * 2.6, 0);
+          drawUpright(ctx, GARY, occS, { pose: p.walking ? 'walk' : 'hold', expr: 'happy', t: t + 0.5 });
+          ctx.restore();
+          me({ pose: p.walking ? 'walk' : 'hold' });
+          break;
+        case 'jetski': {
+          // towed behind you on a little trailer
+          ctx.save();
+          ctx.translate(side * S * 1.7, S * 0.25);
+          ctx.fillStyle = '#3a3a44';
+          ctx.fillRect(-S * 0.55, S * 0.55, S * 1.1, S * 0.12);
+          [-1, 1].forEach((k) => {
+            ctx.fillStyle = '#1a1a1e';
+            ctx.beginPath();
+            ctx.ellipse(k * S * 0.55, S * 0.62, S * 0.14, S * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          ctx.strokeStyle = '#3a3a44';
+          ctx.lineWidth = Math.max(2, S * 0.06);
+          ctx.beginPath();
+          ctx.moveTo(0, -S * 0.2);
+          ctx.lineTo(-side * S * 1.3, -S * 0.6);
+          ctx.stroke();
+          ctx.rotate(step * 0.03);
+          drawCraftTop(ctx, id, S * 0.7, { t: 0, dry: true });
+          ctx.restore();
+          me({ pose: p.walking ? 'walk' : 'hold' });
+          break;
+        }
+        case 'goose':
+          // the goose waddles along with you, honking occasionally
+          vessel(side * S * 1.7, S * 0.1 - Math.abs(step) * S * 0.08, step * 0.14, 0.7, { t, active: Math.sin(t * 2) > 0.95 });
+          me();
+          break;
+        default:
+          me();
       }
-      if (p.slip > 0) ctx.rotate(-1.4 * Math.min(1, (1.3 - p.slip) * 4));
-      drawUpright(ctx, ch, occS, { ...charOpts, pose: p.walking ? 'walk' : p.slip > 0 ? 'flail' : 'wave', expr: p.slip > 0 ? 'hurt' : 'happy', lifejacket: this.craft.id === 'lifejacket' });
     } else {
       const pose = this.playerPose();
       // per-vessel jump-in animation

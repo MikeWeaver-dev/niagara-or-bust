@@ -21,13 +21,13 @@ Start on the bank, pick your spot, jump in, paddle and dodge while the current d
 
 | Vessel | Base | River ability | Drop mini-game |
 |---|---|---|---|
-| Absolutely Nothing | 14% | PANIC! (swim faster) | Pencil-dive ring timing |
-| Life Jacket | 22% | BOB (hop) | Tuck ring timing |
+| Absolutely Nothing | 18% | PANIC! (swim faster) | Pencil-dive ring timing |
+| Life Jacket | 22% | BOB (hop) | Hold to inflate the vest, let go in the green (don't pop it) |
 | Surfboard | 22% | OLLIE (+ SHRED lumens in rapids) | **Surf down the face of the falls**, keep your balance |
-| Oak Barrel | 34% | BRACE (-75% damage) | Brace ring timing |
+| Oak Barrel | 34% | BRACE (-75% damage) | Mash to stuff it with pillows |
 | Kayak | 30% | ROLL (invulnerable) | Tilt the nose into the green, then BOOF |
-| Canoe (+ Gary) | 33% | POWER STROKE (dash) | "Hold on, Gary!" ring timing |
-| Hamster Ball | 42% | BOUNCE (jump) | Curl-up ring timing |
+| Canoe (+ Gary) | 33% | POWER STROKE (dash) | Air-paddle left/right in rhythm with Gary |
+| Hamster Ball | 42% | BOUNCE (jump) | Steer your landing into the deep-water zone |
 | Jet Ski + Parachute | 34% | TURBO (smash logs) | **Deploy the chute** in the green altitude zone |
 | The Golden Goose | **100%** | FLAP (fly) + lays golden eggs | Glide down like royalty (flap to float, steer anywhere) |
 

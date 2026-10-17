@@ -86,7 +86,7 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
 }
 .wrap {
   max-width: 1100px;
@@ -912,4 +912,8 @@ input[type='range'] {
   text-shadow: 0 2px 0 var(--ink);
   white-space: nowrap;
   animation: wobble 2.4s ease-in-out infinite;
+}
+
+.screen.loadout-screen {
+  padding-bottom: calc(12px + var(--safe-b));
 }
