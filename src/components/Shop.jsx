@@ -33,7 +33,7 @@ export default function Shop() {
           </div>
           <div className="panel" style={{ marginBottom: 16, textAlign: 'center', padding: 12 }}>
             <b>Every unlock boosts your lumen earnings by +15%</b> (now x{mult.toFixed(2)}). Vessels unlock in order. The Golden Goose needs everything else first.
-            {economy === 'test' && <div style={{ fontSize: 12, marginTop: 4, color: '#6b2fd6' }}>TEST ECONOMY: prices are super cheap (change in Settings)</div>}
+            {economy === 'test' && <div style={{ fontSize: 12, marginTop: 4, color: '#6b2fd6' }}>ECONOMY PRICES: everything is super cheap (change in Settings)</div>}
           </div>
           <div className="grid">
             {(tab === 'craft' ? CRAFTS : CHARACTERS).map((item) => (

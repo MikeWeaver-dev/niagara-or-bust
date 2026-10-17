@@ -25,7 +25,11 @@ export default function HowTo() {
               <li>Your live <b>ODDS</b> are shown at the top. Going faster helps you clear the rocks at the bottom.</li>
             </ul>
             <h3>3. THE DROP</h3>
-            <p>188 feet of pure physics. Each vessel has its own mini-game: time the ring to brace, surf the face of the falls, tilt your kayak for a BOOF, deploy the parachute in the green zone, or glide the Golden Goose. Then the dice roll on your odds.</p>
+            <p>188 feet of pure physics, and every vessel has its own mini-game: pencil-dive ring timing, inflate the life jacket (don't pop it), mash pillows into the barrel, surf the face of the falls, tilt your kayak and BOOF, air-paddle in rhythm with Gary, roll the hamster ball into the deep water, deploy the parachute in the green zone, or glide the Golden Goose. Then the dice roll on your odds. The bottom is full of rocks: some round, some pointy (impaling), some flat (pancaking).</p>
+            <h3>HARD MODE</h3>
+            <p>Turn it on in Settings or on the loadout screen: tourists on the banks shoot at you with slingshots and BB guns, and they can kill you before you even reach the edge (your corpse still goes over). Grab the floating slingshot to fire back (F or the SHOOT button).</p>
+            <h3>RUMORS</h3>
+            <p>They say there's a cave behind the falls that only the Golden Goose can reach. They also say lightning strikes about once in a hundred trips. And that there's always a bear.</p>
             <h3>4. LUMENS & UNLOCKS</h3>
             <p>Every attempt pays lumens (survive for a big bonus; die messily for a gore bonus). Spend them in the Gift Shop. Vessels unlock in order; each unlock boosts future earnings. The <b>Golden Goose</b> is last, and it always survives.</p>
             <h3>CHEATS</h3>

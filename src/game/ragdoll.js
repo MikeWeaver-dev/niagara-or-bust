@@ -238,6 +238,7 @@ export function drawRagdoll(ctx, rag, lw, t) {
   if (rag.hidden) return;
   ctx.save();
   ctx.globalAlpha = rag.alpha;
+  if (rag.charred) ctx.filter = 'brightness(0.32) contrast(1.2)';
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   if (rag.kind === 'giraffe') drawGiraffeRag(ctx, rag, lw, t);
@@ -535,7 +536,10 @@ function drawGiraffeRag(ctx, rag, lw, t) {
     reticulate(ctx, -0.3 * s, -0.4 * s, L + 0.6 * s, 0.8 * s, 0.14 * s, 5);
     ctx.restore();
   }
-  if (rag.opts.lifejacket) taper(ctx, P.shoulders, P.n1, 0.42 * s, 0.36 * s, '#ff7a1a', lw);
+  if (rag.opts.lifejacket) {
+    const inf = 1 + (rag.opts.inflate || 0) * 0.9;
+    taper(ctx, P.shoulders, P.n1, 0.42 * s * inf, 0.36 * s * inf, '#ff7a1a', lw);
+  }
   const neck = [['neck1', 'shoulders', 'n1', 0.32, 0.26], ['neck2', 'n1', 'n2', 0.26, 0.21], ['neck3', 'n2', 'head', 0.21, 0.17]];
   neck.forEach(([b, a, z, w0, w1], i) => {
     if (!live(bones[b])) return;

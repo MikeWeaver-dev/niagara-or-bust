@@ -56,10 +56,17 @@ export default function Settings() {
             </div>
             <div className="setting">
               <label>
-                💡 Economy
-                <small>TEST = dirt-cheap unlocks for testing. NORMAL = 6x prices</small>
+                💡 Prices
+                <small>ECONOMY = dirt-cheap unlocks. NORMAL = 6x prices</small>
               </label>
-              <Seg value={s.economy} options={[['test', 'TEST'], ['normal', 'NORMAL']]} onChange={(v) => setSetting('economy', v)} />
+              <Seg value={s.economy} options={[['test', 'ECONOMY'], ['normal', 'NORMAL']]} onChange={(v) => setSetting('economy', v)} />
+            </div>
+            <div className="setting">
+              <label>
+                😈 Hard Mode
+                <small>Tourists with slingshots & BB guns can kill you before the falls. Grab a slingshot to fire back.</small>
+              </label>
+              <Seg value={s.hard ? 'on' : 'off'} options={[['off', 'OFF'], ['on', 'ON']]} onChange={(v) => setSetting('hard', v === 'on')} />
             </div>
             <div className="setting">
               <label>

@@ -126,7 +126,7 @@ export const CRAFTS = [
     bounce: 0.55,
     ability: { id: 'power', name: 'POWER STROKE', cd: 4, dur: 0.9, desc: 'You AND Gary paddle like maniacs. Big dash.' },
     drop: 'rhythm',
-    dropTip: 'Air-paddle left/right in rhythm with Gary to keep the nose up!',
+    dropTip: 'Air-paddle left/right in rhythm with Gary. Stay in sync for a cleaner landing!',
     desc: 'Comes with Gary. Nobody knows Gary. Gary is coming anyway.',
     stats: { speed: 3, steer: 3, tough: 3 },
     passenger: true,

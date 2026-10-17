@@ -20,6 +20,7 @@ export const defaultSave = () => ({
     economy: 'test', // test (cheap) | normal
     shake: true,
     touch: 'auto', // auto | on | off
+    hard: false, // hard mode: bank snipers can kill you before the falls
   },
   stats: { runs: 0, survived: 0, died: 0, streak: 0, bestStreak: 0, limbs: 0, bears: 0, bestOdds: 0 },
 });

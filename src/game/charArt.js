@@ -1942,10 +1942,10 @@ export function drawCat(ctx, S, t) {
 }
 
 // Big grizzly (3/4 front), rising out of the water. bloody: 0..1
-export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0 } = {}) {
+export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOverride } = {}) {
   ctx.save();
   ctx.scale((S / 100) * scale, (S / 100) * scale);
-  const lw = Math.max(1.6, 180 / (S * scale));
+  const lw = lwOverride ?? Math.max(1.6, 180 / (S * scale));
   ctx.lineWidth = lw;
   ctx.strokeStyle = SOFT;
   ctx.lineJoin = 'round';

@@ -350,28 +350,73 @@ export function drawSheet(ctx, t, lw, disco) {
   ctx.restore();
 }
 
-export function drawRocks(ctx, rocks, lw) {
-  rocks.forEach((r) => {
-    if (r.hidden) return;
-    ctx.fillStyle = r.color;
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = lw;
-    ctx.beginPath();
+function rockBody(ctx, r) {
+  ctx.beginPath();
+  if (r.type === 'spike') {
+    const { x, baseY, tip } = r;
+    const v = r.verts;
+    ctx.moveTo(x - r.r, baseY);
+    ctx.lineTo(x - r.r * 0.7 * v[0], baseY - r.h * 0.3);
+    ctx.lineTo(x - r.r * 0.45 * v[1] + (tip.x - x) * 0.5, baseY - r.h * 0.55);
+    ctx.lineTo(x - r.r * 0.2 * v[2] + (tip.x - x) * 0.8, baseY - r.h * 0.82);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.lineTo(x + r.r * 0.22 * v[3] + (tip.x - x) * 0.8, baseY - r.h * 0.78);
+    ctx.lineTo(x + r.r * 0.5 * v[4] + (tip.x - x) * 0.5, baseY - r.h * 0.5);
+    ctx.lineTo(x + r.r * 0.75 * v[5], baseY - r.h * 0.25);
+    ctx.lineTo(x + r.r, baseY);
+  } else if (r.type === 'flat') {
+    const { x, w, top } = r;
+    ctx.moveTo(x - w, POOL_Y + 0.6);
+    ctx.lineTo(x - w - 0.15, top + 0.25);
+    ctx.quadraticCurveTo(x - w, top - 0.02, x - w + 0.3, top);
+    for (let k = 1; k < 7; k++) ctx.lineTo(x - w + (k / 7) * w * 2, top - 0.03 + r.verts[k] * 0.06);
+    ctx.lineTo(x + w - 0.3, top);
+    ctx.quadraticCurveTo(x + w, top - 0.02, x + w + 0.15, top + 0.25);
+    ctx.lineTo(x + w, POOL_Y + 0.6);
+  } else {
     r.verts.forEach((k, i) => {
       const a = (i / r.verts.length) * TAU;
       ctx.lineTo(r.x + Math.cos(a) * r.r * k, r.y + Math.sin(a) * r.r * k * 0.85);
     });
-    ctx.closePath();
+  }
+  ctx.closePath();
+}
+
+export function drawRocks(ctx, rocks, lw) {
+  rocks.forEach((r) => {
+    if (r.hidden) return;
+    rockBody(ctx, r);
+    const g = ctx.createLinearGradient(r.x - (r.w || r.r), 0, r.x + (r.w || r.r), 0);
+    g.addColorStop(0, shade(r.color, 0.18));
+    g.addColorStop(0.55, r.color);
+    g.addColorStop(1, shade(r.color, -0.35));
+    ctx.fillStyle = g;
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = lw;
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(r.x - r.r * 0.3, r.y - r.r * 0.45, r.r * 0.35, r.r * 0.14, -0.3, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(70,130,60,0.55)';
-    ctx.beginPath();
-    ctx.ellipse(r.x + r.r * 0.2, r.y - r.r * 0.6, r.r * 0.3, r.r * 0.1, 0.2, 0, TAU);
-    ctx.fill();
+    if (r.type === 'spike') {
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = lw * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(r.x - r.r * 0.55, r.baseY - r.h * 0.2);
+      ctx.lineTo(r.tip.x - 0.05, r.tip.y + 0.25);
+      ctx.stroke();
+    } else if (r.type === 'flat') {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillRect(r.x - r.w + 0.3, r.top + 0.02, r.w * 2 - 0.6, 0.12);
+      ctx.fillStyle = 'rgba(70,130,60,0.5)';
+      ctx.fillRect(r.x - r.w * 0.6, r.top + 0.14, r.w * 0.5, 0.08);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(r.x - r.r * 0.3, r.y - r.r * 0.45, r.r * 0.35, r.r * 0.14, -0.3, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(70,130,60,0.55)';
+      ctx.beginPath();
+      ctx.ellipse(r.x + r.r * 0.2, r.y - r.r * 0.6, r.r * 0.3, r.r * 0.1, 0.2, 0, TAU);
+      ctx.fill();
+    }
     (r.decals || []).forEach((d) => {
       ctx.fillStyle = d.c;
       ctx.beginPath();
@@ -393,9 +438,38 @@ export function drawRocks(ctx, rocks, lw) {
   });
 }
 
-export function makeRock(x, y, r, seed) {
+export function makeRock(x, y, r, seed, type = 'round') {
   const R = rng(seed);
-  return { x, y, r, verts: Array.from({ length: 10 }, () => 0.75 + R() * 0.4), color: shade(['#6e6a66', '#7a726a', '#5f6066', '#81776c'][Math.floor(R() * 4)], -0.1), decals: [] };
+  const color = shade(['#6e6a66', '#7a726a', '#5f6066', '#81776c'][Math.floor(R() * 4)], -0.1);
+  if (type === 'spike') {
+    // a jagged spire of rock sticking up out of the plunge pool
+    const baseY = POOL_Y + 0.3;
+    const h = r * (2.1 + R() * 0.7);
+    const lean = (R() - 0.5) * r * 0.5;
+    const tip = { x: x + lean, y: baseY - h };
+    return {
+      type, x, y: baseY - h * 0.4, r, h, baseY, tip, color, decals: [],
+      verts: Array.from({ length: 6 }, () => 0.8 + R() * 0.4),
+      circles: [
+        { x, y: baseY - h * 0.15, r: r * 0.78 },
+        { x: x + lean * 0.5, y: baseY - h * 0.5, r: r * 0.45 },
+        { x: x + lean * 0.85, y: baseY - h * 0.84, r: r * 0.17 },
+      ],
+    };
+  }
+  if (type === 'flat') {
+    // a wide flat slab, perfect for pancaking
+    const top = POOL_Y - 0.55;
+    const w = r * 1.6;
+    const circles = [];
+    for (let k = 0; k < 5; k++) circles.push({ x: x - w + 0.4 + (k / 4) * (w * 2 - 0.8), y: top + 0.42, r: 0.42 });
+    return { type, x, y: top + 0.4, r, w, top, color: shade(color, 0.08), decals: [], verts: Array.from({ length: 8 }, () => R()), circles };
+  }
+  return { type: 'round', x, y, r, verts: Array.from({ length: 10 }, () => 0.75 + R() * 0.4), color, decals: [], circles: [{ x, y, r: r * 0.88 }] };
+}
+
+export function rockContains(r, x, y, pad = 1.1) {
+  return r.circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r * pad) || (r.type === 'flat' && Math.abs(x - r.x) < r.w && y > r.top - 0.05 && y < POOL_Y + 0.6);
 }
 
 export function drawPoolBack(ctx, t, x0, x1) {

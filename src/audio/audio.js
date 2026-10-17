@@ -539,6 +539,43 @@ class AudioEngine {
     for (let i = 0; i < 8; i++) this.noise({ t: t + i * 0.025, dur: 0.05, type: 'bandpass', f: 1200 + Math.random() * 1500, q: 2, gain: 0.25 });
     this.squish();
   }
+  thunder() {
+    const t = this.now;
+    this.noise({ t, dur: 0.12, type: 'highpass', f: 2000, gain: 0.6 });
+    this.noise({ t: t + 0.05, dur: 2.4, type: 'lowpass', f: 600, f2: 80, gain: 0.7, brown: true });
+    this.tone({ type: 'sine', f: 55, f2: 30, t, dur: 1.6, gain: 0.5 });
+    for (let i = 0; i < 8; i++) this.noise({ t: t + Math.random() * 0.4, dur: 0.05, type: 'highpass', f: 3000, gain: 0.25 });
+  }
+  thwip() {
+    this.noise({ dur: 0.12, type: 'bandpass', f: 900, f2: 2600, q: 2, gain: 0.25 });
+    this.tone({ type: 'triangle', f: 500, f2: 900, dur: 0.08, gain: 0.08 });
+  }
+  pew() {
+    this.tone({ type: 'square', f: 1600, f2: 300, dur: 0.12, gain: 0.1 });
+    this.noise({ dur: 0.05, type: 'highpass', f: 3000, gain: 0.2 });
+  }
+  thwack() {
+    this.tone({ type: 'sine', f: 380, f2: 120, dur: 0.1, gain: 0.3 });
+    this.noise({ dur: 0.06, type: 'bandpass', f: 1500, gain: 0.3 });
+  }
+  ping() {
+    this.tone({ type: 'sine', f: 2400, f2: 1800, dur: 0.15, gain: 0.12 });
+  }
+  // Funny spoken last words via the browser's built-in speech synthesizer (Chrome desktop + Android)
+  say(text, pitch = 1, rate = 1.05) {
+    try {
+      const S = window.speechSynthesis;
+      if (!S || this.sfxVol <= 0) return;
+      S.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.pitch = Math.max(0, Math.min(2, pitch));
+      u.rate = rate;
+      u.volume = Math.min(1, this.sfxVol * 1.1);
+      S.speak(u);
+    } catch {
+      /* no speech on this device: the synth screams still play */
+    }
+  }
   thud() {
     this.tone({ type: 'sine', f: 120, f2: 45, dur: 0.18, gain: 0.35 });
   }

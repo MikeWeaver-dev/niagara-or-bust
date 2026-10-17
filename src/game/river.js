@@ -9,10 +9,16 @@ import * as art from './riverArt.js';
 import { drawUpright, drawSalmonTop, drawBear, drawCat, GARY } from './charArt.js';
 import { drawCraftTop, kayakPaddle, canoePaddle } from './vesselArt.js';
 import { drawButton, drawJoystick, pill, bar, lumenIcon } from './hud.js';
-import { OUCH, SCREAMS } from '../data/messages.js';
+import { OUCH, SCREAMS, lastWords, VOICE_PITCH } from '../data/messages.js';
 import { SALMON } from '../data/crafts.js';
 
 const CHUNK = 16;
+const SNIPERS = [
+  { id: 'tourist', kind: 'human', scale: 1.05, headScale: 1, hat: 'cap', extras: ['sunglasses'], colors: { skin: '#e8b48e', hair: '#5a3a20', shirt: '#b8302a', shirt2: '#3a1010', collar: '#fff', pants: '#3a4a6a', shoes: '#2a2018', hat: '#ff7a1a', hatBand: '#fff', accent: '#fff' } },
+  { id: 'tourist', kind: 'human', scale: 1.1, headScale: 1, hat: 'none', extras: ['beard'], colors: { skin: '#c8906a', hair: '#2a1a10', shirt: '#5a6a3a', shirt2: '#3a4a2a', collar: '#fff', pants: '#4a4030', shoes: '#2a2018', hat: '#000', hatBand: '#000', accent: '#fff' } },
+  { id: 'tourist', kind: 'human', scale: 0.98, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#8a5634', hair: '#1a1a1a', shirt: '#ffd23b', shirt2: '#fff', collar: '#fff', pants: '#2b3a67', shoes: '#fff', hat: '#2456b8', hatBand: '#fff', accent: '#fff' } },
+];
+const AGENT = { id: 'tourist', kind: 'human', scale: 1.05, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#e0b08a', hair: '#3a2a1a', shirt: '#1d2b4f', shirt2: '#1d2b4f', collar: '#c8a040', pants: '#1d2b4f', shoes: '#111', hat: '#1d2b4f', hatBand: '#c8a040', accent: '#c8a040' } };
 const BODY_HP = 60;
 const ENTER_HOP = { nothing: 0.6, lifejacket: 1.9, surfboard: 1.1, barrel: 0.9, kayak: 0.35, canoe: 0.35, hamster: 1.0, jetski: 1.7, goose: 1.3, salmon: 1.4 };
 const DEBRIS_KINDS = ['tire', 'duck', 'cone', 'cart', 'flamingo', 'crate'];
@@ -56,6 +62,19 @@ export class River {
     this.bear = null;
     this.swipes = [];
     this.salmonT = 0;
+    this.hard = !!game.cfg.settings.hard && !this.salmon;
+    this.shots = [];
+    this.flash = 0;
+    this.bolt = null;
+    this.mauler = null;
+    // 1% flukes: lightning, or a bear that just... gets you
+    this.fluke = null;
+    if (!this.salmon) {
+      const roll = Math.random();
+      if (cheats.lightning || roll < 0.01) this.fluke = { kind: 'lightning', at: rand(5, 14) };
+      else if (cheats.randomBear || roll < 0.02) this.fluke = { kind: 'bear', at: rand(5, 14) };
+    }
+    this.agent = character.id === 'kacey' && !this.salmon ? { type: 'agent', x: -(RW + 2.4), d: brinkAt(-RW) - 9 } : null;
 
     if (this.salmon) {
       this.p.x = -RW - 2.2;
@@ -147,6 +166,11 @@ export class River {
         this.rapids.push({ d0: d0 + r() * 6, d1: d0 + 10 + r() * 6, x0, x1: Math.min(RW - 0.3, x0 + 4 + r() * 7), seed: Math.floor(r() * 1e6) });
       }
     }
+    if (this.hard && d0 > 24 && d0 < RIVER_LEN - 30 && r() < 0.6) {
+      const side = r() < 0.5 ? -1 : 1;
+      this.props.push({ type: 'shooter', x: side * (RW + 2.4), d: d0 + r() * CHUNK, weapon: r() < 0.5 ? 'slingshot' : 'bb', cd: 1 + r() * 2, dead: false, seed: Math.floor(r() * 1e6), aim: 0 });
+    }
+    if (this.hard && c === 3) add({ type: 'slingshot', x: (r() * 2 - 1) * RW * 0.5, d: d0 + 8 });
     // lumens to collect
     const patterns = this.cheats.lumenRain ? 4 : r() < 0.85 ? 1 : 2;
     for (let k = 0; k < patterns; k++) {
@@ -415,10 +439,25 @@ export class River {
         p.ko = false;
         p.koT = 0;
         p.hp = p.maxHp * 0.35;
-        p.invuln = 1.5;
+        p.invuln = 3;
         audio.whoa(this.voice());
         this.say('WOKE UP!', '#5dff8a', 28);
       }
+    }
+
+    if (p.dead) {
+      // a limp corpse rides the current over the edge, sliding past every rock
+      p.vx *= Math.exp(-1.5 * dt);
+      if (Math.abs(p.x) > RW * 0.6) p.vx -= Math.sign(p.x) * 2 * dt;
+      p.vd = approach(p.vd, this.currentAt(p.x, p.d) * 1.6 + 1, 2, dt);
+      p.x = clamp(p.x + p.vx * dt, -RW + 0.6, RW - 0.6);
+      p.d += p.vd * dt;
+      p.rot += dt * 0.5;
+      p.z = 0;
+      if (this.goreStyle() !== 'cartoon' && Math.random() < 0.25) this.fx.cloud(p.x, p.d - 0.5, goreOf(this.goreStyle()).cloud, 0.6);
+      this.updateShots(dt);
+      if (p.d >= brinkAt(p.x) - 0.4) this.startBrink();
+      return;
     }
 
     // ability
@@ -520,17 +559,22 @@ export class River {
     }
 
     this.collide(dt, turbo);
+    this.updateFluke(dt);
+    if (this.hard) this.updateShooters(dt, inp);
+    if (p.dead) return;
 
-    // anti-stuck: if something pins you in place, the river shoves you around it
-    if (!this.salmon && p.vd < 0.9) {
-      p.stuckT = (p.stuckT || 0) + dt;
-      if (p.stuckT > 1) {
-        p.stuckT = 0;
-        p.vx += (p.x > 0 ? -1 : 1) * 7;
-        p.d += 0.4;
-        p.vd = Math.max(p.vd, 2);
+    // anti-stuck: no real progress for 1.5s? the river hops you over whatever is pinning you
+    if (!this.salmon) {
+      if (!p.prog) p.prog = { d: p.d, t: 0 };
+      p.prog.t += dt;
+      if (p.d - p.prog.d > 1) p.prog = { d: p.d, t: 0 };
+      else if (p.prog.t > 1.5) {
+        p.prog = { d: p.d, t: 0 };
+        p.vz = 6;
+        p.vd = Math.max(p.vd, 4);
+        p.vx += (p.x > 0 ? -1 : 1) * 3;
       }
-    } else p.stuckT = 0;
+    }
 
     if (this.salmon) this.updateSalmon(dt);
     else if (p.d >= brinkAt(p.x) - 0.4) this.startBrink();
@@ -614,6 +658,17 @@ export class River {
     for (let i = this.obs.length - 1; i >= 0; i--) {
       const o = this.obs[i];
       if (Math.abs(o.d - p.d) > 6) continue;
+      if (o.type === 'slingshot') {
+        if (Math.hypot(o.x - p.x, o.d - p.d) < rad + 0.8 && p.z < 2.2) {
+          this.obs.splice(i, 1);
+          p.slingshot = true;
+          audio.bigPickup();
+          this.fx.sparkles(o.x, o.d, 16);
+          this.fx.text('GOT A SLINGSHOT!', p.x, p.d, '#ffd23b', 26, 1.5, 2);
+          this.fx.text(this.g.showTouch ? 'TAP SHOOT TO FIRE BACK' : 'PRESS F TO FIRE BACK', p.x, p.d - 1.2, '#fff', 16, 1.2, 2.2);
+        }
+        continue;
+      }
       if (o.type === 'orb') {
         if (Math.hypot(o.x - p.x, o.d - p.d) < rad + 0.55 && p.z < 2.2) {
           this.obs.splice(i, 1);
@@ -768,9 +823,10 @@ export class River {
     this.damage(dmg, o.type);
   }
 
-  damage(amount, cause) {
+  damage(amount, cause, lethal = false) {
     const p = this.p;
-    if (this.cheats.invincible || this.salmon || (this.craft.id === 'goose' && !p.wrecked)) return;
+    if (p.dead || this.cheats.invincible || this.salmon || (this.craft.id === 'goose' && !p.wrecked)) return;
+    if (p.ko && !lethal) return; // no kicking someone while they're down
     p.hp -= amount;
     p.hitT = 0.5;
     if (p.hp > 0) return;
@@ -793,6 +849,8 @@ export class River {
       this.g.shake(1);
       this.fx.text(`${C.short.toUpperCase()} DESTROYED!`, p.x, p.d, '#ff5a5a', 26, 1.5, 2.2);
       if (C.id === 'canoe') this.fx.text('GARY SWIMS AWAY', p.x + 2, p.d + 1.5, '#9ef', 16, 1, 2);
+    } else if (lethal) {
+      this.die(cause);
     } else if (!p.ko) {
       p.ko = true;
       p.koT = 0;
@@ -802,6 +860,310 @@ export class River {
       this.fx.stars(p.x, p.d, 6, 0.8);
       this.fx.text('KNOCKED OUT!', p.x, p.d, '#ff5a5a', 28, 1.4, 2.4);
     }
+  }
+
+  // ------------------------------------------------------------ dying before the falls
+  die(cause) {
+    const p = this.p;
+    if (p.dead || this.mode !== 'river') return;
+    p.dead = true;
+    p.deadCause = cause;
+    p.ko = false;
+    p.hp = 0;
+    p.vx *= 0.3;
+    let style = this.goreStyle();
+    if (this.g.cfg.poop && style !== 'cartoon') {
+      style = 'poop';
+      audio.fart();
+      this.fx.stink(p.x, p.d, 8, 0.6);
+    }
+    this.fx.blood(p.x, p.d, 0, 1, 2, style, 0.6);
+    if (style !== 'cartoon') {
+      this.fx.gibs(p.x, p.d, 0.8, style, 0.6);
+      this.splat.add(3, style, 1);
+    } else this.fx.stars(p.x, p.d, 7, 0.8);
+    audio.splat(1);
+    audio.say(lastWords(this.ch.id, style === 'poop'), VOICE_PITCH[this.ch.id] || 1);
+    audio.stopEngine();
+    this.g.shake(1.2);
+    this.fx.text('YOU DIED.', p.x, p.d, '#ff3b3b', 34, 1.6, 2.6);
+    this.fx.text("...BUT YOU'RE STILL GOING OVER", p.x, p.d - 1.4, '#fff', 18, 1.2, 2.6);
+  }
+
+  updateFluke(dt) {
+    const F = this.fluke;
+    const p = this.p;
+    if (F && !F.done && !p.dead && this.modeT >= F.at) {
+      F.done = true;
+      if (F.kind === 'lightning') {
+        this.bolt = { t: 0.55, x: p.x, d: p.d };
+        this.flash = 1;
+        audio.thunder();
+        p.charred = true;
+        this.fx.smoke(p.x, p.d, 12);
+        this.fx.sparkles(p.x, p.d, 20, 1, ['#ffffff', '#bfe9ff', '#fff6a0']);
+        this.die('lightning');
+      } else {
+        const side = p.x < 0 ? -1 : 1;
+        this.mauler = { x: side * (RW + 3), d: p.d + 3, x0: side * (RW + 3), t: 0, hit: false, mouth: 0 };
+        audio.roar();
+        this.say('BEAR!!', '#ff5a5a', 34);
+      }
+    }
+    const M = this.mauler;
+    if (M) {
+      M.t += dt;
+      if (M.t < 0.7) {
+        const k = M.t / 0.7;
+        M.x = lerp(M.x0, p.x, k);
+        M.d = lerp(p.d + 3, p.d + 0.6, k);
+        M.z = Math.sin(k * Math.PI) * 2.5;
+        M.mouth = k;
+      } else if (!M.hit) {
+        M.hit = true;
+        M.z = 0;
+        audio.chomp();
+        audio.roar();
+        const style = this.goreStyle();
+        this.fx.blood(p.x, p.d, 0, 1, 2.5, style, 0.8);
+        this.fx.gibs(p.x, p.d, 1.2, style, 0.8);
+        if (style !== 'cartoon') this.fx.guts(p.x, p.d, 2, style, 0.8);
+        this.die('randombear');
+      } else if (M.t < 2.2) {
+        M.x = p.x;
+        M.d = p.d + 0.6;
+        M.mouth = Math.abs(Math.sin(M.t * 9)) * 0.6;
+      } else {
+        M.x = lerp(M.x, M.x0, Math.min(1, dt * 3));
+        M.mouth = 0;
+        if (M.t > 3.6) this.mauler = null;
+      }
+    }
+    this.flash = Math.max(0, this.flash - dt * 2.5);
+    if (this.bolt) {
+      this.bolt.t -= dt;
+      if (this.bolt.t <= 0) this.bolt = null;
+    }
+  }
+
+  // ------------------------------------------------------------ hard mode: snipers on the banks
+  updateShooters(dt, inp) {
+    const p = this.p;
+    p.shootCd = Math.max(0, (p.shootCd || 0) - dt);
+    for (const sh of this.props) {
+      if (sh.type !== 'shooter' || sh.dead) continue;
+      sh.aim = Math.max(0, sh.aim - dt);
+      if (Math.abs(sh.d - p.d) > 15 || p.dead) continue;
+      sh.cd -= dt;
+      if (sh.cd <= 0) {
+        const bb = sh.weapon === 'bb';
+        sh.cd = bb ? rand(0.9, 1.7) : rand(1.5, 2.8);
+        sh.aim = 0.25;
+        const tx = p.x + p.vx * 0.45 + rand(-0.8, 0.8);
+        const td = p.d + p.vd * 0.45 + rand(-0.8, 0.8);
+        const dx = tx - sh.x;
+        const dd = td - sh.d;
+        const L = Math.hypot(dx, dd) || 1;
+        const sp = bb ? 26 : 19;
+        this.shots.push({ x: sh.x, d: sh.d, z: 1.3, vx: (dx / L) * sp, vd: (dd / L) * sp, kind: sh.weapon, enemy: true, life: 1.4 });
+        if (bb) audio.pew();
+        else audio.thwip();
+      }
+    }
+    // fire back with your own slingshot
+    if (p.slingshot && !p.dead && inp.pressed('shoot') && p.shootCd <= 0) {
+      let best = null;
+      let bestD = 1e9;
+      for (const sh of this.props) {
+        if (sh.type !== 'shooter' || sh.dead) continue;
+        const dd = sh.d - p.d;
+        if (dd < -4 || dd > 20) continue;
+        const dist = Math.hypot(sh.x - p.x, dd);
+        if (dist < bestD) {
+          bestD = dist;
+          best = sh;
+        }
+      }
+      p.shootCd = 0.45;
+      audio.thwip();
+      const tx = best ? best.x : p.x + (p.x < 0 ? -12 : 12);
+      const td = best ? best.d + p.vd * 0.2 : p.d + 6;
+      const dx = tx - p.x;
+      const dd = td - p.d;
+      const L = Math.hypot(dx, dd) || 1;
+      this.shots.push({ x: p.x, d: p.d, z: 1.2, vx: (dx / L) * 30, vd: (dd / L) * 30 + p.vd * 0.5, kind: 'slingshot', enemy: false, life: 1.2 });
+    }
+    this.updateShots(dt);
+  }
+
+  updateShots(dt) {
+    const p = this.p;
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const b = this.shots[i];
+      b.life -= dt;
+      b.x += b.vx * dt;
+      b.d += b.vd * dt;
+      b.z = Math.max(0.2, b.z - dt * 0.4);
+      let hit = false;
+      if (b.enemy) {
+        const rolling = this.craft.ability.id === 'roll' && p.abil > 0 && !p.wrecked;
+        if (!p.dead && !rolling && p.z < 1.6 && Math.hypot(b.x - p.x, b.d - p.d) < (this.craft.radius || 0.5) + 0.35) {
+          hit = true;
+          this.shotHit(b);
+        }
+      } else {
+        for (const sh of this.props) {
+          if (sh.type !== 'shooter' || sh.dead) continue;
+          if (Math.hypot(b.x - sh.x, b.d - sh.d) < 0.9) {
+            hit = true;
+            this.killShooter(sh);
+            break;
+          }
+        }
+      }
+      if (hit || b.life <= 0 || Math.abs(b.x) > RW + 14) {
+        if (!hit && Math.abs(b.x) < RW) this.fx.splash(b.x, b.d, 0.15);
+        this.shots.splice(i, 1);
+      }
+    }
+  }
+
+  shotHit(b) {
+    const p = this.p;
+    const bb = b.kind === 'bb';
+    audio.thwack();
+    if (this.isSwimmer) {
+      this.fx.blood(p.x, p.d, b.vx, b.vd, 0.6, this.goreStyle(), 0.8);
+      audio.oof(this.voice());
+      this.fx.text(bb ? 'PING!' : 'THWACK!', p.x, p.d, '#ff5a5a', 22, 1, 0.9);
+    } else {
+      audio.ping();
+      this.fx.debris(p.x, p.d, '#bbbbbb', 3, 0.1, 0.5, 'shard');
+      this.fx.text(bb ? 'PING!' : 'DONK!', p.x, p.d, '#fff', 20, 1, 0.8);
+    }
+    this.damage(bb ? 9 : 13, 'shot', true);
+  }
+
+  killShooter(sh) {
+    sh.dead = true;
+    const style = this.g.cfg.settings.gore === 'off' ? 'cartoon' : 'blood';
+    this.fx.blood(sh.x, sh.d, 0, 1, 1.6, style, 1.2);
+    this.fx.gibs(sh.x, sh.d, 0.8, style, 1.2);
+    audio.splat(0.8);
+    audio.oof(0.9 + Math.random() * 0.4);
+    this.run.lumens += 3;
+    this.fx.text(pick(['HEADSHOT! +3', 'GOT EM! +3', 'TAKE THAT! +3', 'BULLSEYE! +3']), sh.x, sh.d, '#ffd23b', 22, 2, 1.4);
+  }
+
+  drawShooter(ctx, v, sh) {
+    const { sx, sy, S, t } = v;
+    const ch = SNIPERS[sh.seed % SNIPERS.length];
+    ctx.save();
+    ctx.translate(sx(sh.x), sy(sh.d));
+    if (sh.dead) {
+      if (this.g.cfg.settings.gore !== 'off') {
+        ctx.fillStyle = 'rgba(110,0,8,0.85)';
+        ctx.beginPath();
+        ctx.ellipse(0, -S * 0.1, S * 1.1, S * 0.4, 0, 0, TAU);
+        ctx.fill();
+      }
+      ctx.rotate(Math.sign(sh.x) * 1.5);
+      drawUpright(ctx, ch, S * 0.75, { pose: 'limp', expr: 'ko', t });
+      ctx.restore();
+      return;
+    }
+    const toRiver = -Math.sign(sh.x);
+    const weapon = (c, sk, lw) => {
+      const hx = (sk.handL.x + sk.handR.x) / 2;
+      const hy = (sk.handL.y + sk.handR.y) / 2;
+      c.lineCap = 'round';
+      if (sh.weapon === 'bb') {
+        c.strokeStyle = '#222';
+        c.lineWidth = 5 * sk.s + lw;
+        c.beginPath();
+        c.moveTo(hx - toRiver * 18 * sk.s, hy + 4 * sk.s);
+        c.lineTo(hx + toRiver * 42 * sk.s, hy - 4 * sk.s);
+        c.stroke();
+        c.strokeStyle = '#6a4426';
+        c.lineWidth = 7 * sk.s;
+        c.beginPath();
+        c.moveTo(hx - toRiver * 20 * sk.s, hy + 6 * sk.s);
+        c.lineTo(hx - toRiver * 4 * sk.s, hy + 2 * sk.s);
+        c.stroke();
+        if (sh.aim > 0.15) {
+          c.fillStyle = '#fff3a0';
+          c.beginPath();
+          c.arc(hx + toRiver * 46 * sk.s, hy - 5 * sk.s, 5 * sk.s, 0, TAU);
+          c.fill();
+        }
+      } else {
+        const fx = hx + toRiver * 6 * sk.s;
+        c.strokeStyle = '#6a4426';
+        c.lineWidth = 4 * sk.s + lw;
+        c.beginPath();
+        c.moveTo(fx, hy + 10 * sk.s);
+        c.lineTo(fx, hy - 4 * sk.s);
+        c.moveTo(fx, hy - 4 * sk.s);
+        c.lineTo(fx - 6 * sk.s, hy - 14 * sk.s);
+        c.moveTo(fx, hy - 4 * sk.s);
+        c.lineTo(fx + 6 * sk.s, hy - 14 * sk.s);
+        c.stroke();
+        c.strokeStyle = '#c84a3a';
+        c.lineWidth = 1.5 * sk.s + 0.5;
+        const pull = sh.aim > 0 ? 0 : 10 * sk.s;
+        c.beginPath();
+        c.moveTo(fx - 6 * sk.s, hy - 14 * sk.s);
+        c.lineTo(fx - toRiver * pull, hy - 8 * sk.s);
+        c.lineTo(fx + 6 * sk.s, hy - 14 * sk.s);
+        c.stroke();
+      }
+    };
+    drawUpright(ctx, ch, S * 0.75, { pose: 'hold', expr: 'determined', t: t + (sh.seed % 7), armL: 1.25, armR: 1.25, bendL: 0.9, bendR: 0.9, holding: weapon });
+    ctx.restore();
+  }
+
+  drawAgent(ctx, v) {
+    const A = this.agent;
+    const { sx, sy, S, t } = v;
+    ctx.save();
+    ctx.translate(sx(A.x), sy(A.d));
+    drawUpright(ctx, AGENT, S * 0.8, { pose: 'wave', expr: 'happy', t });
+    // badge + maple leaf patch
+    ctx.fillStyle = '#d8b040';
+    ctx.beginPath();
+    ctx.arc(-S * 0.08, -S * 0.98, S * 0.05, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#d6202a';
+    ctx.beginPath();
+    ctx.arc(S * 0.12, -S * 0.98, S * 0.05, 0, TAU);
+    ctx.fill();
+    // speech bubble
+    const text = 'Let me pet you!';
+    ctx.font = `${Math.max(12, S * 0.32)}px "Luckiest Guy", sans-serif`;
+    const w = ctx.measureText(text).width + S * 0.5;
+    const h = S * 0.62;
+    const bx = S * 0.3;
+    const by = -S * 2.7 + Math.sin(t * 3) * S * 0.05;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#1a1030';
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, bx, by, w, h, h / 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx + S * 0.35, by + h - 1);
+    ctx.lineTo(bx + S * 0.1, by + h + S * 0.35);
+    ctx.lineTo(bx + S * 0.7, by + h - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx + S * 0.3, by + h - 4, S * 0.42, 6);
+    ctx.fillStyle = '#c8102e';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + S * 0.25, by + h / 2 + 1);
+    ctx.restore();
   }
 
   // ------------------------------------------------------------ salmon mode
@@ -1039,13 +1401,16 @@ export class River {
       speed: Math.max(4, p.vd),
       hpRatio: p.hp / p.maxHp,
       wrecked: p.wrecked,
-      ko: p.ko,
+      ko: p.ko || p.dead,
+      dead: !!p.dead,
+      deadCause: p.deadCause || null,
+      charred: !!p.charred,
       lumens: this.run.lumens,
       run: { ...this.run },
       progress: 1,
     };
     audio.stopEngine();
-    audio.scream(this.voice(), 1.4);
+    if (!p.dead) audio.scream(this.voice(), 1.4);
     audio.whoosh(1.2);
     music.play('drop');
     this.g.shake(0.6);
@@ -1184,6 +1549,8 @@ export class River {
     for (const pr of this.props) if (pr.d > dMin - 4 && pr.d < dMax + 6) items.push(pr);
     items.push({ type: 'player', d: this.p.d - 0.01 });
     if (this.bear) items.push({ type: 'bankbear', d: this.bear.d, x: this.bear.x });
+    if (this.agent) items.push(this.agent);
+    if (this.mauler) items.push({ type: 'mauler', d: this.mauler.d });
     items.sort((a, b) => b.d - a.d);
     for (const it of items) {
       switch (it.type) {
@@ -1202,6 +1569,52 @@ export class River {
         case 'player':
           this.drawPlayer(ctx, v);
           break;
+        case 'shooter':
+          this.drawShooter(ctx, v, it);
+          break;
+        case 'agent':
+          this.drawAgent(ctx, v);
+          break;
+        case 'mauler': {
+          const M = this.mauler;
+          ctx.save();
+          ctx.translate(sx(M.x), sy(M.d, M.z || 0));
+          drawBear(ctx, S, this.t, { mouth: M.mouth, scale: 1.1, bloody: M.hit ? 1 : 0 });
+          ctx.restore();
+          break;
+        }
+        case 'slingshot': {
+          const bob = Math.sin(this.t * 4) * 0.1;
+          ctx.save();
+          ctx.translate(sx(it.x), sy(it.d, 0.4 + bob));
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, S * 0.9);
+          g.addColorStop(0, 'rgba(255,230,120,0.8)');
+          g.addColorStop(1, 'rgba(255,230,120,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, S * 0.9, 0, TAU);
+          ctx.fill();
+          ctx.rotate(Math.sin(this.t * 2) * 0.3);
+          ctx.strokeStyle = '#6a4426';
+          ctx.lineCap = 'round';
+          ctx.lineWidth = S * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(0, S * 0.35);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(-S * 0.22, -S * 0.3);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(S * 0.22, -S * 0.3);
+          ctx.stroke();
+          ctx.strokeStyle = '#c84a3a';
+          ctx.lineWidth = S * 0.04;
+          ctx.beginPath();
+          ctx.moveTo(-S * 0.22, -S * 0.3);
+          ctx.lineTo(0, -S * 0.12);
+          ctx.lineTo(S * 0.22, -S * 0.3);
+          ctx.stroke();
+          ctx.restore();
+          break;
+        }
         case 'bankbear':
           ctx.save();
           ctx.translate(sx(it.x), sy(it.d));
@@ -1245,6 +1658,35 @@ export class River {
       drawCat(ctx, S * 0.9, this.t);
       ctx.restore();
     }
+    // projectiles
+    this.shots.forEach((b) => {
+      const bx = sx(b.x);
+      ctx.fillStyle = 'rgba(0,30,50,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(bx, sy(b.d), S * 0.12, S * 0.05, 0, 0, TAU);
+      ctx.fill();
+      const by = sy(b.d, b.z);
+      if (b.kind === 'bb') {
+        ctx.strokeStyle = 'rgba(255,220,150,0.6)';
+        ctx.lineWidth = Math.max(1.5, S * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx - b.vx * S * 0.02, by + b.vd * S * 0.02);
+        ctx.stroke();
+        ctx.fillStyle = '#c8803a';
+        ctx.beginPath();
+        ctx.arc(bx, by, Math.max(2, S * 0.06), 0, TAU);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = b.enemy ? '#7a7670' : '#ffd23b';
+        ctx.strokeStyle = '#1a1030';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(bx, by, Math.max(3, S * 0.11), 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+      }
+    });
     // gulls (high up)
     this.gulls.forEach((gl) => art.drawSeagull(ctx, sx(gl.x), sy(gl.d, 5), S * 0.6, this.t + gl.x));
 
@@ -1265,6 +1707,30 @@ export class River {
         ctx.fillRect(0, 0, W, H * 0.6);
       }
     }
+    if (this.bolt) {
+      // forked lightning straight down onto you
+      const B = this.bolt;
+      const tx = sx(B.x);
+      const ty = sy(B.d, 0.6);
+      [['rgba(150,200,255,0.45)', 16], ['#ffffff', 5]].forEach(([col, w]) => {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = w;
+        ctx.lineJoin = 'miter';
+        ctx.beginPath();
+        let x = tx + rand(-60, 60);
+        ctx.moveTo(x, 0);
+        const steps = 9;
+        for (let i = 1; i <= steps; i++) {
+          x = i === steps ? tx : x + rand(-40, 40);
+          ctx.lineTo(x, (ty * i) / steps);
+        }
+        ctx.stroke();
+      });
+    }
+    if (this.flash > 0) {
+      ctx.fillStyle = `rgba(230,240,255,${this.flash * 0.85})`;
+      ctx.fillRect(0, 0, W, H);
+    }
     if (this.cheats.disco) art.drawDiscoLights(ctx, W, H, this.t);
     if (this.mode === 'brink') {
       const k = clamp(this.modeT / 1.35, 0, 1);
@@ -1276,6 +1742,12 @@ export class River {
   }
 
   playerPose() {
+    const base = this.basePose();
+    if (this.p.dead) return { ...base, pose: 'limp', expr: 'ko', holding: undefined };
+    return base;
+  }
+
+  basePose() {
     const p = this.p;
     const id = this.effCraftId;
     if (p.ko) return { pose: 'limp', expr: 'ko', cutY: -110 };
@@ -1332,6 +1804,7 @@ export class River {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(p.scale, p.scale);
+    if (p.charred) ctx.filter = 'brightness(0.32) contrast(1.2)';
     const tilt = this.mode === 'river' ? clamp(p.vx * 0.035, -0.25, 0.25) : 0;
     ctx.rotate(tilt + p.rot + (p.spin > 0 ? this.t * 9 * Math.min(1, p.spin) : 0));
     if (this.salmon) {
@@ -1371,7 +1844,7 @@ export class River {
         case 'surfboard':
           // hoisted overhead
           me({ pose: p.slip > 0 ? 'flail' : 'cheer' });
-          vessel(0, -S * 1.85 + Math.abs(step) * S * 0.05, Math.PI / 2 + step * 0.04, 0.6);
+          vessel(0, -S * 1.95 + Math.abs(step) * S * 0.05, Math.PI / 2 + step * 0.04, id === 'surfboard' ? 0.85 : 0.6);
           break;
         case 'canoe':
           // you and Gary each carry an end
@@ -1496,7 +1969,8 @@ export class River {
       const odds = this.currentOdds();
       const lane = laneOf(this.mode === 'bank' ? p.x : p.x);
       pill(ctx, W / 2, 26, 156, 38);
-      bigText(ctx, `ODDS ${Math.round(odds * 100)}%`, W / 2, 27, 22, oddsColor(odds));
+      bigText(ctx, p.dead ? 'DEAD' : `ODDS ${Math.round(odds * 100)}%`, W / 2, 27, 22, p.dead ? '#ff5a5a' : oddsColor(odds));
+      if (this.hard) bigText(ctx, '😈 HARD MODE', 64, 84, 12, '#ff8a8a');
       const lb = LANE_BONUS[lane];
       if (!(this.craft.alwaysSurvive && !p.wrecked) && !this.cheats.god && !this.cheats.alwaysDie) {
         bigText(ctx, `${LANE_NAME[lane]} ${lb >= 0 ? '+' : ''}${Math.round(lb * 100)}%`, W / 2, 55, 14, lb > 0 ? '#5dff8a' : lb < 0 ? '#ff8a8a' : '#fff');
@@ -1565,11 +2039,18 @@ export class River {
       }
     } else if (this.mode === 'river') {
       const ab = p.wrecked ? { name: 'PANIC!', cd: 4.5 } : this.craft.ability;
-      if (touch) {
+      if (p.dead) {
+        this.g.input.setButtons([]);
+        bigText(ctx, 'DEAD. FLOATING TOWARD THE FALLS...', W / 2, H - 40, Math.min(20, W * 0.045), '#ff8a8a');
+      } else if (touch) {
         btn.label = ab.name;
-        this.g.input.setButtons([btn]);
+        const list = [btn];
+        if (p.slingshot) list.push({ id: 'shoot', x: btn.x, y: btn.y - btnR * 2.3, r: btnR * 0.8, label: 'SHOOT', action: 'shoot' });
+        this.g.input.setButtons(list);
         drawButton(ctx, btn, { color: '#ff4f7b', cd: p.cd > 0 ? p.cd / ab.cd : 0 });
+        if (p.slingshot) drawButton(ctx, list[1], { color: '#8a5a2b', cd: p.shootCd > 0 ? p.shootCd / 0.45 : 0 });
       } else {
+        if (p.slingshot) bigText(ctx, 'F: SHOOT BACK', W / 2, H - 84, 16, '#ffd23b');
         this.g.input.setButtons([]);
         const ready = p.cd <= 0;
         bigText(ctx, `SPACE: ${ab.name}${ready ? '' : ` (${p.cd.toFixed(1)})`}`, W / 2, H - 30, 18, ready ? '#ffd23b' : '#aaa');

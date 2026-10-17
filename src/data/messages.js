@@ -90,6 +90,36 @@ export const DEATH = {
     ['NECK WAS TOO LONG', 'Hit the rocks first. Then the rest arrived.'],
   ],
   bobby: [['NOT AGAIN, BOBBY', 'Somewhere, an orange peel is laughing.']],
+  shot: [
+    ['SHOT BY A TOURIST', 'Their vacation photos are going to be wild.'],
+    ['SNIPED FROM THE GIFT SHOP', 'You were not even over the falls yet.'],
+    ['BB\'D TO DEATH', 'Death by a thousand tiny copper balls.'],
+    ['SLINGSHOTTED', 'David 1, Goliath 0. You were Goliath.'],
+  ],
+  lightning: [
+    ['STRUCK BY LIGHTNING', 'Statistically unlikely. Personally devastating.'],
+    ['ZAPPED', 'Water and electricity: a classic combo.'],
+    ['SMITED', 'Somebody up there really did not like that.'],
+  ],
+  randombear: [
+    ['A BEAR. FOR NO REASON.', 'It came out of nowhere. Bears do that.'],
+    ['MAULED MID-RIVER', 'That bear was not even in the brochure.'],
+    ['SURPRISE BEAR', 'There is always a bear. ALWAYS.'],
+  ],
+  impaled: [
+    ['IMPALED', 'You found the pointy rock. With your entire body.'],
+    ['SHISH KEBAB\'D', 'Served on a stick, Niagara style.'],
+    ['SKEWERED', 'The rock is wearing you now.'],
+  ],
+  pancake: [
+    ['PANCAKED', 'Short stack. Extra flat. Nobody wants this one.'],
+    ['FLATTENED ON A ROCK', 'You are now two-dimensional.'],
+    ['ROLLED OUT LIKE DOUGH', 'Bake at 350 for... no. Just no.'],
+  ],
+  banana: [
+    ['SLIPPED ON A BANANA PEEL', 'You found the secret cave. Then the secret banana.'],
+    ['SECRET CAVE, SECRET DEATH', '"Well done, young grasshopper." Then: banana.'],
+  ],
   bear: [
     ['EATEN BY A BEAR', 'Swam upstream. Found a bear. Circle of life.'],
     ['DISEMBOWELED BY A GRIZZLY', 'Nature documentary narrators everywhere just went silent.'],
@@ -99,6 +129,22 @@ export const DEATH = {
     ['THE BEAR ALWAYS WINS', 'You can fight the current. You cannot fight a bear.'],
   ],
 };
+
+export const LAST_WORDS = {
+  generic: ['I regret everything!', 'Worth it!', 'Tell my mother I was right!', 'Oh no.', 'Ow. Ow. Ow. Ow.', 'That was a mistake!', 'Not like this!', 'I can\'t feel my everything!', 'Bye bye!', 'Oopsie daisy!', 'Mama!', 'Ouchie!', 'Totally fine!', 'Nailed it.'],
+  annie: ['Nobody ought ever do that again!', 'Oh dear me!', 'Not my good hat!', 'In my day we had barrels!'],
+  timmy: ['Mom\'s gonna be so mad!', 'That was awesome! Ow.', 'I want my juice box!', 'Again! Again!'],
+  bobby: ['Not again!', 'My kneecaps!', 'Curse you, orange peel!', 'Strongman down!'],
+  jean: ['Sacré bleu!', 'Mon dieu!', 'Oh la la!', 'Zut alors!'],
+  kacey: ['Giraffes can\'t swim!', 'My beautiful neck!', 'Rainbow powers, fail!', 'Pet me later!'],
+  gary: ['Why am I here?!', 'Gary out!', 'I just came for the boat tour!'],
+  poop: ['Oh no. Oh no no no.', 'That is not blood!', 'Excuse me!', 'Too many hot dogs!'],
+};
+export const VOICE_PITCH = { annie: 1.35, timmy: 1.95, bobby: 0.55, jean: 0.95, kacey: 1.7, gary: 0.75 };
+export function lastWords(character, poop = false) {
+  const pool = poop ? LAST_WORDS.poop : Math.random() < 0.55 && LAST_WORDS[character] ? LAST_WORDS[character] : LAST_WORDS.generic;
+  return pick(pool);
+}
 
 export const SURVIVE = [
   ['SURVIVED!', 'Your chiropractor just bought a boat.'],
@@ -132,8 +178,10 @@ export const DIARRHEA = [
 ];
 
 export function deathMessage({ cause, character, craft, wrecked, poop }) {
+  if (cause === 'banana') return pick(DEATH.banana);
   if (poop) return pick(DIARRHEA);
   if (cause === 'bear') return pick(DEATH.bear);
+  if (['shot', 'lightning', 'randombear', 'impaled', 'pancake'].includes(cause) && character !== 'timmy') return pick(DEATH[cause]);
   if (character === 'timmy') return pick(DEATH.timmy);
   const roll = Math.random();
   if (character === 'kacey' && roll < 0.4) return pick(DEATH.kacey);

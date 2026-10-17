@@ -91,18 +91,20 @@ function Loadout({ onStart }) {
               ))}
             </div>
           )}
-          <div className="go-bar">
-            <div className="summary">
-              {ch.name}
-              <br />
-              <span style={{ color: '#ffd23b' }}>{save.cheats.salmon ? 'as a SALMON' : `in: ${cr.name}`}</span>
-            </div>
-            <button className="btn big" disabled={!chOk || !crOk} onClick={onStart}>
-              GO! 🌊
-            </button>
-          </div>
           {(!chOk || !crOk) && <div className="why" style={{ color: '#ffb0c4' }}>Pick something you own (or turn on "Try Everything" in Cheats)</div>}
         </div>
+      </div>
+      <div className="go-bar">
+        <div className="summary">
+          <div className="who">{ch.name}</div>
+          <div className="what">{save.cheats.salmon ? 'as a SALMON' : `in: ${cr.name}`}</div>
+        </div>
+        <button className={`hard-chip ${save.settings.hard ? 'on' : ''}`} onClick={() => { audio.click(); setSetting('hard', !save.settings.hard); }} title="Tourists can shoot you before the falls">
+          😈 HARD {save.settings.hard ? 'ON' : 'OFF'}
+        </button>
+        <button className="btn go-main" disabled={!chOk || !crOk} onClick={onStart}>
+          GO! 🌊
+        </button>
       </div>
       {toast}
     </>
@@ -134,6 +136,8 @@ function GameView({ onLoadout, onAgain }) {
       craft: getCraft(s.selected.craft),
       cheats: { ...s.cheats },
       settings: { ...s.settings },
+      // every now and then the blood is... not blood. Rolled once per run.
+      poop: !!s.cheats.diarrhea || Math.random() < 0.07,
     };
     const g = new Game(canvas.current, {
       cfg,

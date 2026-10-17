@@ -19,6 +19,9 @@ export const CHEATS = [
   { id: 'lazy', icon: '🛟', name: 'Lazy River', desc: 'The current is half as strong (you still go over).' },
   { id: 'skipToEdge', icon: '⏩', name: 'Skip to the Edge', desc: 'Start right before the falls.' },
   { id: 'lumenRain', icon: '💡', name: 'Lumen Rain', desc: 'The river is FULL of lumens.' },
+  { id: 'lightning', icon: '⚡', name: 'Lightning Magnet', desc: 'Guaranteed lightning strike in the river. (Normally a 1% fluke.)' },
+  { id: 'randomBear', icon: '🐻', name: 'Surprise Bear', desc: 'A bear WILL jump you in the river. (Normally a 1% fluke.)' },
+  { id: 'gooseCave', icon: '🕳️', name: 'Show Me The Cave', desc: 'Mark the secret cave behind the falls (Golden Goose only).' },
 ];
 
 // Typed cheat codes (enter on the Cheats screen)
@@ -29,6 +32,9 @@ export const CODES = {
   BLOODBATH: { toggle: 'goreGalore', msg: 'Oh no.' },
   KABOOM: { toggle: 'explosive', msg: 'Boom boom.' },
   POOP: { toggle: 'diarrhea', msg: 'Oh no. Oh no no no.' },
+  ZAP: { toggle: 'lightning', msg: 'You feel tingly.' },
+  BEAR: { toggle: 'randomBear', msg: 'Something is watching you.' },
+  GRASSHOPPER: { toggle: 'gooseCave', msg: 'Annie left you a message...' },
   BIGHEAD: { toggle: 'bigHead', msg: 'Big brain time.' },
   DISCO: { toggle: 'disco', msg: 'Let\'s boogie.' },
   MOON: { toggle: 'moon', msg: 'One small step...' },

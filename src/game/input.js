@@ -9,6 +9,7 @@ const KEYMAP = {
   ArrowDown: 'down', KeyS: 'down',
   Space: 'primary', Enter: 'primary', KeyE: 'primary', ShiftLeft: 'primary', ShiftRight: 'primary',
   Escape: 'pause', KeyP: 'pause',
+  KeyF: 'shoot', KeyX: 'shoot',
 };
 
 export class Input {
@@ -133,6 +134,10 @@ export class Input {
 
   isDown(a) {
     if (this.held.has(a)) return true;
+    // in tap-anywhere phases, a thumb held down anywhere counts as holding the action
+    if (a === 'primary' && this.tapIsPrimary) {
+      for (const v of this.pointers.values()) if (v.kind === 'tap') return true;
+    }
     return this.buttons.some((b) => b.down && b.action === a);
   }
   pressed(a) {

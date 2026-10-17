@@ -6,12 +6,13 @@ import { FX, Splatter, goreOf } from './fx.js';
 import { Physics, makeBox, makeBall, attach } from './physics.js';
 import { buildHuman, buildGiraffe, breakBone, drawRagdoll, corePoint, poseRagdoll, LIMB_BONES, HEAD_BONE, SPINE_BONE } from './ragdoll.js';
 import { drawCraftSide, drawParachute, drawGooseSide } from './vesselArt.js';
-import { drawHead, drawUpright, GARY, OUTLINE } from './charArt.js';
+import { drawHead, drawUpright, drawBear, GARY, OUTLINE } from './charArt.js';
+import { lastWords, VOICE_PITCH } from '../data/messages.js';
 import * as art from './dropArt.js';
-import { POOL_Y, LIP_DEPTH, cliffX } from './dropArt.js';
+import { POOL_Y, LIP_DEPTH, cliffX, rockContains } from './dropArt.js';
 import { clamp, lerp, rand, pick, approach, bigText, TAU, easeOutBack, roundRect } from './util.js';
 import { computeOdds, oddsColor, LANE_NAME } from './odds.js';
-import { drawButton, pill, bar } from './hud.js';
+import { drawButton, drawJoystick, pill, bar } from './hud.js';
 import { RAINBOW } from '../data/characters.js';
 
 const RING_LABEL = { pencil: 'POINT YOUR TOES!', boof: 'BOOF!' };
@@ -19,6 +20,8 @@ const MINI_MODES = ['inflate', 'mash', 'rhythm', 'aim'];
 const JOY_MODES = ['boof', 'surf', 'glide', 'aim'];
 const RING_BONUS = { perfect: 0.18, good: 0.09, ok: 0.03, miss: -0.05 };
 const DECIDE_Y = 33;
+const CAVE_Y0 = 20;
+const CAVE_Y1 = 26;
 
 export class Drop {
   constructor(game, info) {
@@ -42,7 +45,9 @@ export class Drop {
     this.flags = {};
     this.goreStyle = settings.gore === 'off' || character.gore === 'cartoon' ? 'cartoon' : character.gore;
     // every now and then (or always, with the cheat) the blood is... not blood
-    this.poop = this.goreStyle !== 'cartoon' && (cheats.diarrhea || Math.random() < 0.07);
+    this.poop = this.goreStyle !== 'cartoon' && !!game.cfg.poop;
+    // died in the river (snipers, lightning, surprise bear)? Then this is a guaranteed messy landing.
+    this.forced = info.dead ? info.deadCause || 'shot' : null;
     this.splat = new Splatter();
 
     const P = new Physics();
@@ -56,6 +61,7 @@ export class Drop {
     this.rocks = this.makeRocks(info.lane);
     this.flowV = clamp(info.speed, 4, 13) * 0.95;
     this.setupBodies();
+    if (info.charred) this.rider.charred = true;
     this.cam = { x: -4, y: -0.5, S: this.baseScale(9) };
     this.boatX = 46;
 
@@ -74,10 +80,12 @@ export class Drop {
 
   makeRocks(lane) {
     const rocks = [];
-    const spots = lane === 'edge' ? [1, 3.2, 5.5, 8, 10.5, 13, 15.5] : lane === 'mid' ? [1.2, 4, 7, 10] : [1.5];
+    const spots = lane === 'edge' ? [0.8, 2.8, 4.8, 7, 9.2, 11.5, 13.8, 16.2, 18.5] : lane === 'mid' ? [1, 3.4, 6, 8.6, 11.5, 14.5] : [1.2, 3.6, 18];
     spots.forEach((x, i) => {
-      const r = lane === 'edge' ? rand(1.1, 1.8) : rand(0.9, 1.4);
-      rocks.push(art.makeRock(x + rand(-0.5, 0.5), POOL_Y - r * 0.35 + rand(-0.2, 0.3), r, i * 31 + Math.floor(Math.random() * 1000)));
+      const r = lane === 'edge' ? rand(1.0, 1.7) : rand(0.85, 1.35);
+      const roll = Math.random();
+      const type = roll < 0.3 ? 'spike' : roll < 0.5 ? 'flat' : 'round';
+      rocks.push(art.makeRock(x + rand(-0.4, 0.4), POOL_Y - r * 0.35 + rand(-0.2, 0.3), r, i * 31 + Math.floor(Math.random() * 1000), type));
     });
     return rocks;
   }
@@ -273,29 +281,31 @@ export class Drop {
       p.y = POOL_Y + 14;
       p.py = p.y;
     }
-    // rocks
+    // rocks (each is a few collision circles: round boulders, spikes, slabs)
     for (const r of this.rocks) {
       if (r.hidden) continue;
-      const dx = p.x - r.x;
-      const dy = p.y - r.y;
-      const d = Math.hypot(dx, dy);
-      const min = r.r * 0.88 + p.r;
-      if (d < min && d > 0) {
-        const nx = dx / d;
-        const ny = dy / d;
-        const vx = (p.x - p.px) / dt;
-        const vy = (p.y - p.py) / dt;
-        const vn = vx * nx + vy * ny;
-        p.x = r.x + nx * min;
-        p.y = r.y + ny * min;
-        if (vn < 0) {
-          const tx = vx - vn * nx;
-          const ty = vy - vn * ny;
-          const nvx = tx * 0.6 - vn * nx * 0.25;
-          const nvy = ty * 0.6 - vn * ny * 0.25;
-          p.px = p.x - nvx * dt;
-          p.py = p.y - nvy * dt;
-          if (-vn > 7) this.onRockHit(p, -vn, r);
+      for (const cc of r.circles) {
+        const dx = p.x - cc.x;
+        const dy = p.y - cc.y;
+        const d = Math.hypot(dx, dy);
+        const min = cc.r + p.r;
+        if (d < min && d > 0) {
+          const nx = dx / d;
+          const ny = dy / d;
+          const vx = (p.x - p.px) / dt;
+          const vy = (p.y - p.py) / dt;
+          const vn = vx * nx + vy * ny;
+          p.x = cc.x + nx * min;
+          p.y = cc.y + ny * min;
+          if (vn < 0) {
+            const tx = vx - vn * nx;
+            const ty = vy - vn * ny;
+            const nvx = tx * 0.6 - vn * nx * 0.25;
+            const nvy = ty * 0.6 - vn * ny * 0.25;
+            p.px = p.x - nvx * dt;
+            p.py = p.y - nvy * dt;
+            if (-vn > 7) this.onRockHit(p, -vn, r);
+          }
         }
       }
     }
@@ -345,7 +355,7 @@ export class Drop {
     if (blood) {
       for (const r of this.rocks) {
         if (r.hidden) continue;
-        if (Math.hypot(p.x - r.x, p.y - r.y) < r.r * 0.95) {
+        if (rockContains(r, p.x, p.y, 1.15)) {
           if (r.decals.length < 40) r.decals.push({ x: p.x - r.x, y: p.y - r.y, r: rand(0.06, 0.22), a: rand(0, TAU), c: p.kind === 'glitter' ? pick(RAINBOW) : pick(goreOf(p.style).decal), drip: Math.random() < 0.4 ? rand(0.2, 0.7) : 0 });
           return false;
         }
@@ -357,6 +367,7 @@ export class Drop {
 
   // ------------------------------------------------------------ odds / decision
   finalOdds() {
+    if (this.forced) return 0;
     const info = this.info;
     return computeOdds({
       craft: this.craft,
@@ -398,13 +409,22 @@ export class Drop {
       const rockChance = lane === 'edge' ? 0.75 : lane === 'mid' ? 0.45 : 0.18;
       if (this.cheats.explosive) cause = 'explode';
       else if (this.mini.chute && this.mini.chute.deployed) cause = 'chute';
-      else if (this.info.ko) cause = 'unconscious';
-      else if (Math.random() < rockChance) cause = 'rocks';
-      else cause = Math.random() < 0.85 || this.cheats.goreGalore || this.poop ? 'water' : 'drown';
-      if (cause === 'rocks' || (cause === 'unconscious' && Math.random() < 0.5) || (cause === 'explode' && Math.random() < 0.5)) {
-        if (!this.rocks.some((r) => near(r) && !r.hidden)) {
-          this.rocks.push(art.makeRock(land.x, POOL_Y - 0.9, 1.7, Math.floor(Math.random() * 9999)));
-        }
+      else if (this.info.ko && !this.forced) cause = 'unconscious';
+      else if (Math.random() < Math.max(rockChance, this.forced ? 0.6 : 0)) cause = 'rocks';
+      else cause = Math.random() < 0.85 || this.cheats.goreGalore || this.poop || this.forced ? 'water' : 'drown';
+      if (cause === 'rocks') {
+        // which rock gets you: a spike (impaled), a slab (pancaked) or a plain old boulder
+        const v = Math.random();
+        cause = v < 0.36 ? 'impaled' : v < 0.68 ? 'pancake' : 'rocks';
+      }
+      if (['rocks', 'impaled', 'pancake'].includes(cause) || (cause === 'unconscious' && Math.random() < 0.5) || (cause === 'explode' && Math.random() < 0.5)) {
+        const want = cause === 'impaled' ? 'spike' : cause === 'pancake' ? 'flat' : null;
+        this.rocks.forEach((r) => {
+          if (Math.abs(r.x - land.x) < (r.w || r.r) + 2.5) r.hidden = true;
+        });
+        const rock = art.makeRock(land.x, POOL_Y - 0.9, want === 'flat' ? 1.5 : 1.6, Math.floor(Math.random() * 9999), want || 'round');
+        this.rocks.push(rock);
+        this.killRock = rock;
       } else {
         this.rocks.forEach((r) => {
           if (near(r)) r.hidden = true;
@@ -462,7 +482,12 @@ export class Drop {
     const cause = O.cause;
     const rag = this.rider;
     const style = this.goreStyle;
-    const gore = this.cheats.goreGalore ? 'galore' : this.settings.gore;
+    const gore = this.cheats.goreGalore || this.forced === 'banana' ? 'galore' : this.settings.gore;
+    // famous last words (Chrome's built-in voice, pitched per character)
+    setTimeout(() => audio.say(lastWords(this.ch.id, this.poop), VOICE_PITCH[this.ch.id] || 1), 180);
+    if (this.gary) setTimeout(() => audio.say(lastWords('gary'), VOICE_PITCH.gary), 1700);
+    if (cause === 'impaled' && style !== 'cartoon') this.impale();
+    if (cause === 'pancake' && style !== 'cartoon') this.pancake();
     rag.expr = 'ko';
     rag.dead = true;
     if (this.gary) {
@@ -544,6 +569,283 @@ export class Drop {
     if (gore !== 'on') this.splat.add(gore === 'galore' ? 10 : 4 + Math.floor(Math.random() * 4), gStyle, 1.2);
     else this.splat.add(2, gStyle, 0.8);
     if (gore === 'galore') this.bloodRain = 3.5;
+  }
+
+  // ---- the secret cave behind the falls (Golden Goose only)
+  enterCave() {
+    this.flags.cave = true;
+    this.stage = 'cave';
+    this.stageT = 0;
+    this.cave = { t: 0, exit: false, exitT: 0, bonus: false };
+    this.g.setTimeScale(1, 0);
+    this.g.input.setButtons([]);
+    audio.harp();
+    audio.honk();
+    music.play('goose');
+  }
+
+  updateCave(dt, inp) {
+    const Cv = this.cave;
+    Cv.t += dt;
+    if (!Cv.bonus && Cv.t > 0.8) {
+      Cv.bonus = true;
+      audio.bigPickup();
+    }
+    if (!Cv.exit && (Cv.t > 4.8 || (Cv.t > 2 && (inp.pressed('primary') || inp.tapped)))) {
+      Cv.exit = true;
+      Cv.exitT = 0;
+    }
+    if (!Cv.exit) return;
+    Cv.exitT += dt;
+    if (Cv.exitT > 1.0 && !Cv.slipped) {
+      Cv.slipped = true;
+      audio.slip();
+      audio.whoa(this.ch.voice || 1);
+      setTimeout(() => audio.honk(), 250);
+    }
+    if (Cv.exitT > 1.85) this.leaveCave();
+  }
+
+  leaveCave() {
+    const y = (CAVE_Y0 + CAVE_Y1) / 2;
+    const x = cliffX(y) + 1.3;
+    this.attachSticks.forEach((st) => (st.broken = true));
+    poseRagdoll(this.rider, this.rider.kind === 'giraffe' ? 'stand' : 'stand', x, y - 0.2);
+    this.rider.pts.forEach((pt) => this.phys.setVel(pt, rand(3, 5), rand(-4, -2), 1 / 120));
+    // the goose flaps off, honking in alarm
+    this.body.pts.forEach((pt) => {
+      pt.x += 3;
+      pt.y -= 2.5;
+      pt.px = pt.x;
+      pt.py = pt.y + 0.04;
+    });
+    this.forced = 'banana';
+    this.poop = true;
+    if (this.rider.goreStyle !== 'cartoon') this.rider.goreStyle = 'poop';
+    this.outcome = { survived: false, odds: 0, roll: 1, cause: 'water' };
+    this.stage = 'fall';
+    this.stageT = 0;
+    this.rider.expr = 'scream';
+    music.play('drop');
+    audio.scream(this.ch.voice || 1, 1.6);
+    this.fx.text('BANANA PEEL?!', x + 1, y - 2, '#ffd23b', 32, 0, 1.8);
+  }
+
+  drawCaveMouth(ctx, lw) {
+    const y0 = CAVE_Y0;
+    const y1 = CAVE_Y1;
+    const ym = (y0 + y1) / 2;
+    const cx0 = cliffX(ym);
+    ctx.save();
+    ctx.fillStyle = '#100a06';
+    ctx.strokeStyle = 'rgba(70,45,25,0.95)';
+    ctx.lineWidth = lw * 2;
+    ctx.beginPath();
+    ctx.moveTo(cliffX(y1) + 0.05, y1);
+    ctx.quadraticCurveTo(cx0 - 2.3, y1 + 0.3, cx0 - 2.5, ym);
+    ctx.quadraticCurveTo(cx0 - 2.1, y0 - 0.5, cliffX(y0) + 0.05, y0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // a faint warm glow deep inside (someone left a lantern)
+    const g = ctx.createRadialGradient(cx0 - 1.6, ym, 0.05, cx0 - 1.6, ym, 1.2);
+    g.addColorStop(0, 'rgba(255,200,110,0.35)');
+    g.addColorStop(1, 'rgba(255,200,110,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx0 - 1.6, ym, 1.2, 0, TAU);
+    ctx.fill();
+    // vines hanging over the mouth hide it a little
+    ctx.strokeStyle = 'rgba(70,125,50,0.85)';
+    ctx.lineWidth = lw * 1.6;
+    for (let k = 0; k < 7; k++) {
+      const xx = cliffX(y0) - 0.15 - k * 0.32;
+      const len = 1.2 + (k % 3) * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(xx, y0 - 0.1);
+      ctx.quadraticCurveTo(xx + 0.12, y0 + len * 0.5, xx - 0.05 + Math.sin(this.t * 2 + k) * 0.08, y0 + len);
+      ctx.stroke();
+    }
+    if (this.cheats.gooseCave && this.craftId === 'goose' && !this.flags.cave) {
+      const pulse = 0.6 + Math.sin(this.t * 6) * 0.4;
+      ctx.strokeStyle = `rgba(255,230,90,${pulse})`;
+      ctx.lineWidth = lw * 3;
+      ctx.beginPath();
+      ctx.ellipse(cx0 - 0.9, ym, 1.8, 3.4, 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawCaveScene(ctx) {
+    const { W, H } = this.g;
+    const t = this.t;
+    const Cv = this.cave;
+    const S = Math.min(H * 0.13, W * 0.14);
+    const ground = H * 0.8;
+    // cave interior, lit warmly from the waterfall opening
+    const g = ctx.createRadialGradient(W * 0.85, H * 0.5, 20, W * 0.5, H * 0.5, Math.max(W, H) * 0.85);
+    g.addColorStop(0, '#6a5438');
+    g.addColorStop(0.45, '#2e2216');
+    g.addColorStop(1, '#0a0705');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // the falls seen through the mouth
+    const mx = W * 0.9;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(mx, H * 0.48, W * 0.16, H * 0.36, 0, 0, TAU);
+    ctx.clip();
+    const wg = ctx.createLinearGradient(0, 0, 0, H);
+    wg.addColorStop(0, '#f0fcff');
+    wg.addColorStop(1, '#b8e6f2');
+    ctx.fillStyle = wg;
+    ctx.fillRect(mx - W * 0.2, 0, W * 0.4, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 36; i++) {
+      const x = mx - W * 0.16 + (i / 36) * W * 0.32;
+      const y = ((t * 700 + i * 97) % (H + 90)) - 90;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + 70);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // stalactites + ground
+    ctx.fillStyle = '#1a120b';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (let i = 0; i <= 18; i++) {
+      const x = (i / 18) * W;
+      ctx.lineTo(x, i % 2 ? H * (0.1 + ((i * 37) % 9) / 60) : H * 0.03);
+    }
+    ctx.lineTo(W, 0);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    ctx.lineTo(0, ground);
+    for (let i = 0; i <= 12; i++) ctx.lineTo((i / 12) * W * 0.86, ground + Math.sin(i * 1.7) * 6);
+    ctx.lineTo(W * 0.86, H);
+    ctx.fill();
+    // glowing crystals
+    for (let i = 0; i < 9; i++) {
+      const x = W * (0.05 + i * 0.09);
+      const y = ground - 4 - (i % 3) * 3;
+      ctx.fillStyle = ['rgba(120,255,220,0.8)', 'rgba(255,140,240,0.8)', 'rgba(140,180,255,0.8)'][i % 3];
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y);
+      ctx.lineTo(x, y - 16 - (i % 4) * 5);
+      ctx.lineTo(x + 5, y);
+      ctx.fill();
+    }
+    // Annie's sign
+    const sx = W * 0.42;
+    const bw = Math.min(W * 0.4, 380);
+    const bh = Math.min(H * 0.24, 170);
+    const by = ground - bh - S * 0.9;
+    ctx.fillStyle = '#5a3a1e';
+    ctx.fillRect(sx - 7, by + bh - 4, 14, ground - by - bh + 4);
+    ctx.fillStyle = '#c99a5a';
+    ctx.strokeStyle = '#3a2410';
+    ctx.lineWidth = 4;
+    roundRect(ctx, sx - bw / 2, by, bw, bh, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(90,55,25,0.4)';
+    ctx.lineWidth = 2;
+    for (let k = 1; k < 4; k++) {
+      ctx.beginPath();
+      ctx.moveTo(sx - bw / 2 + 8, by + (k * bh) / 4);
+      ctx.lineTo(sx + bw / 2 - 8, by + (k * bh) / 4 + 2);
+      ctx.stroke();
+    }
+    const fs = Math.min(bw / 12, bh / 4.6);
+    bigText(ctx, 'Well done', sx, by + bh * 0.24, fs, '#3a1e08', 'rgba(255,240,210,0.6)', 'center', 3);
+    bigText(ctx, 'young grasshopper!', sx, by + bh * 0.5, fs, '#3a1e08', 'rgba(255,240,210,0.6)', 'center', 3);
+    bigText(ctx, '- Annie', sx + bw * 0.18, by + bh * 0.78, fs * 0.9, '#6a1e2e', 'rgba(255,240,210,0.6)', 'center', 3);
+    // the goose and rider
+    let gx = W * 0.16;
+    if (Cv.exit) gx = W * 0.16 + Math.min(1, Cv.exitT / 1.0) * W * 0.5;
+    ctx.save();
+    ctx.translate(gx, ground - S * 0.55);
+    ctx.scale(S, S);
+    drawGooseSide(ctx, 2.2 / S, t, Cv.slipped ? 1 : 0);
+    ctx.restore();
+    const lwPx = Math.max(1.6, 150 / S);
+    if (!Cv.slipped) {
+      ctx.save();
+      ctx.translate(gx - S * 0.1, ground - S * 0.95 + (Cv.exit ? Math.abs(Math.sin(Cv.exitT * 12)) * -4 : 0));
+      ctx.translate(0, (80 * S * 0.9) / 100);
+      drawUpright(ctx, this.ch, S * 0.9, { pose: Cv.exit ? 'hold' : 'cheer', expr: 'happy', t, cutY: -80, lw: lwPx });
+      ctx.restore();
+    } else {
+      const k = Math.min(1, (Cv.exitT - 1.0) / 0.85);
+      ctx.save();
+      ctx.translate(lerp(W * 0.66, W * 0.98, k), ground - S * 1.2 - Math.sin(k * Math.PI) * S * 1.6);
+      ctx.rotate(k * 7);
+      drawUpright(ctx, this.ch, S * 0.9, { pose: 'flail', expr: 'scream', t, lw: lwPx });
+      ctx.restore();
+    }
+    // the banana peel, right at the exit. Of course.
+    if (!Cv.slipped) {
+      const px = W * 0.7;
+      ctx.fillStyle = '#ffd84d';
+      ctx.strokeStyle = '#6a5010';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        ctx.save();
+        ctx.translate(px, ground - 4);
+        ctx.rotate(-0.9 + i * 0.9);
+        ctx.beginPath();
+        ctx.ellipse(10, 0, 13, 5, 0, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    bigText(ctx, 'SECRET CAVE FOUND!', W / 2, H * 0.12, Math.min(40, W * 0.08), '#ffd23b');
+    if (Cv.bonus) bigText(ctx, '+25 LUMENS', W / 2, H * 0.12 + 40, Math.min(24, W * 0.05), '#fff6b0');
+    if (Cv.slipped) bigText(ctx, 'WHOOPS.', W / 2, H * 0.35, Math.min(60, W * 0.12), '#ff5a5a');
+    else if (Cv.t > 2 && !Cv.exit) bigText(ctx, this.g.showTouch ? 'tap to leave the cave' : 'press space to leave the cave', W / 2, H - 30, 16, `rgba(255,255,255,${0.5 + Math.sin(t * 4) * 0.3})`);
+  }
+
+  // skewer the body on the spike's tip
+  impale() {
+    const rock = this.killRock;
+    if (!rock || rock.type !== 'spike') return;
+    const rag = this.rider;
+    const core = rag.kind === 'giraffe' ? rag.P.shoulders : rag.P.chest;
+    const pin = this.phys.point(rock.tip.x, rock.tip.y + 0.15, { mass: 0 });
+    const pin2 = this.phys.point(rock.tip.x, rock.tip.y + 0.7, { mass: 0 });
+    core.x = core.px = pin.x;
+    core.y = core.py = pin.y;
+    this.phys.stick(core, pin, { len: 0.01, kind: 'pin' });
+    this.phys.stick(corePoint(rag), pin2, { len: 0.25, stiff: 0.6, kind: 'pin' });
+    for (let k = 0; k < 14; k++) rock.decals.push({ x: rock.tip.x - rock.x + rand(-0.15, 0.15), y: rock.tip.y - rock.y + rand(0.2, 1.8), r: rand(0.08, 0.2), a: rand(0, TAU), c: pick(goreOf(rag.goreStyle).decal), drip: rand(0.4, 1.4) });
+    this.emitters.push({ p: core, from: { x: core.x, y: core.y - 1 }, t: 4, style: rag.goreStyle, phase: 0 });
+    this.fx.text('IMPALED!', rock.tip.x, rock.tip.y - 1.5, '#ff3b3b', 40, 0, 2);
+    audio.crack();
+    audio.squish();
+  }
+
+  // flatten the body onto the slab
+  pancake() {
+    const rock = this.killRock;
+    if (!rock || rock.type !== 'flat') return;
+    const rag = this.rider;
+    const cx = corePoint(rag).x;
+    rag.pts.forEach((pt) => {
+      pt.x = cx + (pt.x - cx) * 1.6;
+      pt.y = rock.top - pt.r - 0.02;
+      pt.px = pt.x;
+      pt.py = pt.y;
+    });
+    for (let k = 0; k < 22; k++) rock.decals.push({ x: cx - rock.x + rand(-1.6, 1.6), y: rock.top - rock.y + rand(0.02, 0.12), r: rand(0.12, 0.32), a: rand(-0.2, 0.2), c: pick(goreOf(rag.goreStyle).decal), drip: Math.random() < 0.5 ? rand(0.2, 0.9) : 0 });
+    this.fx.text('PANCAKED!', cx, rock.top - 2, '#ff3b3b', 40, 0, 2);
+    audio.splat(2);
+    audio.crack();
+    setTimeout(() => audio.crack(), 120);
   }
 
   revealRider() {
@@ -641,6 +943,11 @@ export class Drop {
     this.t += dt;
     this.stageT += dt;
     const inp = this.g.input;
+    if (this.stage === 'cave') {
+      this.updateCave(dt, inp);
+      this.fx.update(dt);
+      return;
+    }
     const steps = Math.max(1, Math.round(dt / (1 / 120)));
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
@@ -755,7 +1062,7 @@ export class Drop {
         const dive = inp.axisY() > 0.3;
         const lift = this.stage === 'after' ? 0 : flap ? 1.0 : dive ? 0.25 : 0.55;
         const maxVy = flap ? 3 : dive ? 14 : 7.5;
-        const pts = [...this.body.pts, ...this.rider.pts];
+        const pts = this.forced === 'banana' ? this.body.pts : [...this.body.pts, ...this.rider.pts];
         pts.forEach((p) => {
           p.ay -= this.phys.gravity * lift;
           p.ax += ax * 10 + (this.stage === 'fall' ? 1.2 : 0);
@@ -835,6 +1142,11 @@ export class Drop {
         }
       }
       if (MINI_MODES.includes(mode) && !this.info.ko && !this.outcome) this.updateMinis(dt, inp, c, mode);
+      if (this.craftId === 'goose' && this.body && !this.flags.cave && this.forced !== 'banana') {
+        const bx = this.body.cx;
+        const by = this.body.cy;
+        if (by > CAVE_Y0 - 0.6 && by < CAVE_Y1 + 0.4 && bx < cliffX(by) + 1.7) this.enterCave();
+      }
       if (mode === 'boof' && this.body && !this.outcome) {
         let a = this.body.angle;
         if (a > Math.PI) a -= TAU;
@@ -859,7 +1171,7 @@ export class Drop {
       }
       // parachute deploy
       const C = this.mini.chute;
-      if (C && !C.deployed && inp.pressed('primary')) this.deployChute();
+      if (C && !C.deployed && !this.info.ko && inp.pressed('primary')) this.deployChute();
       // decision
       let ready = false;
       if (mode === 'glide') ready = true;
@@ -918,7 +1230,37 @@ export class Drop {
         if (O.cause !== 'drown') audio.gasp();
       }
       if (this.boatTarget !== undefined) this.boatX = approach(this.boatX, this.boatTarget, 0.8, dt);
-      const doneAt = O.survived ? 4.2 : 3.6;
+      if (this.forced === 'banana' && !this.sideBear && this.stageT > 1.4) {
+        this.sideBear = { x: corePoint(this.rider).x + 0.3, rise: 0, mouth: 0, t: 0, ate: false };
+        audio.roar();
+        this.fx.text('...AND THEN A BEAR', this.sideBear.x, POOL_Y - 5, '#ff3b3b', 30, 0, 2.2);
+      }
+      if (this.sideBear) {
+        const B = this.sideBear;
+        B.t += dt;
+        B.rise = Math.min(1, B.t / 0.8);
+        B.mouth = B.t < 0.85 ? B.t / 0.85 : B.ate ? Math.abs(Math.sin(B.t * 9)) * 0.5 : 1;
+        if (B.t > 0.9 && !B.ate) {
+          B.ate = true;
+          audio.chomp();
+          audio.squish();
+          this.g.shake(1.4);
+          const st = this.rider.goreStyle;
+          this.fx.blood(B.x, POOL_Y - 2.5, 0, -1, 2.4, st);
+          this.fx.gibs(B.x, POOL_Y - 2.5, 1.3, st);
+          this.fx.guts(B.x, POOL_Y - 2.5, 3, st);
+          this.splat.add(5, st, 1.2);
+          this.rider.hidden = true;
+          this.emitters = [];
+          this.fx.text('CHOMP.', B.x, POOL_Y - 6, '#ffffff', 38, 0, 1.6);
+        }
+        if (B.t > 2.6 && !B.burp) {
+          B.burp = true;
+          audio.burp();
+          this.fx.text('*BURP*', B.x, POOL_Y - 5.5, '#ffd23b', 28, 0, 1.4);
+        }
+      }
+      const doneAt = O.survived ? 4.2 : this.forced === 'banana' ? 6.4 : 3.6;
       const skip = this.stageT > 1.6 && (inp.pressed('primary') || inp.tapped);
       if ((this.stageT > doneAt || skip) && !this.flags.finished) {
         this.flags.finished = true;
@@ -951,7 +1293,7 @@ export class Drop {
         this.rider.opts.inflate = 0;
         this.rider.opts.lifejacket = false;
         this.finishMini(-0.08, 'POPPED IT!', 0);
-      } else if (I.started && !inp.isDown('primary')) {
+      } else if (I.started && (!inp.isDown('primary') || c.y > DECIDE_Y - 2)) {
         audio.whoosh(0.3);
         if (I.m >= 0.65 && I.m <= 0.9) this.finishMini(0.18, 'PERFECTLY PUFFED!', 5);
         else if (I.m >= 0.45) this.finishMini(0.09, 'PUFFY ENOUGH', 3);
@@ -1052,7 +1394,6 @@ export class Drop {
     if (res === 'perfect' || res === 'good') {
       audio.pickup(res === 'perfect' ? 1.5 : 1.2);
       this.applyPose();
-      if (this.dropMode === 'gary') this.fx.text('GARY: "OK!!"', this.core().x + 1, this.core().y - 1.5, '#9ef', 18, 0, 1.3);
       if (this.dropMode === 'boof') audio.slideUp();
     } else audio.denied();
   }
@@ -1076,11 +1417,6 @@ export class Drop {
       ph.stick(P.footL, P.head, { len: 1.5 * s, stiff: 0.3, kind: 'pose' });
       ph.stick(P.handL, P.pelvis, { len: 0.2 * s, stiff: 0.4, kind: 'pose' });
       ph.stick(P.handR, P.pelvis, { len: 0.2 * s, stiff: 0.4, kind: 'pose' });
-    } else if (mode === 'tuck' || mode === 'curl' || mode === 'brace') {
-      ph.stick(P.kneeL, P.chest, { len: 0.25 * s, stiff: 0.4, kind: 'pose' });
-      ph.stick(P.kneeR, P.chest, { len: 0.25 * s, stiff: 0.4, kind: 'pose' });
-      ph.stick(P.handL, P.kneeL, { len: 0.12 * s, stiff: 0.4, kind: 'pose' });
-      ph.stick(P.handR, P.kneeR, { len: 0.12 * s, stiff: 0.4, kind: 'pose' });
     }
   }
 
@@ -1125,8 +1461,8 @@ export class Drop {
       C.torn = true;
       this.addBonus(-0.15, 'SNAGGED BY THE FALLS!', 0);
       audio.whoosh(0.8);
-    } else if (y < 22) this.addBonus(0.35, 'PERFECT DEPLOY!', 6);
-    else if (y < 36) this.addBonus(0.15, 'GOOD DEPLOY', 3);
+    } else if (y >= 8 && y < 16) this.addBonus(0.35, 'PERFECT DEPLOY!', 6);
+    else if (y < 28) this.addBonus(0.15, 'GOOD DEPLOY', 3);
     else this.addBonus(0.03, 'BARELY OPENED', 1);
     C.decideAt = this.t + 0.6;
     this.rider.expr = C.snagged ? 'terrified' : 'happy';
@@ -1145,10 +1481,11 @@ export class Drop {
     if (this.skillLumens) breakdown.push(['Skill bonus', this.skillLumens]);
     if (O.survived) breakdown.push(['SURVIVAL BONUS', 10 + 4 * this.craft.tier]);
     if (gore) breakdown.push(['Gore bonus', gore]);
+    if (this.flags.cave) breakdown.push(['SECRET CAVE BONUS', 25]);
     const total = breakdown.reduce((a, [, n]) => a + n, 0);
     this.g.finish({
       survived: O.survived,
-      cause: O.cause,
+      cause: this.forced || O.cause,
       odds: O.odds,
       roll: O.roll,
       lane: info.lane,
@@ -1157,7 +1494,7 @@ export class Drop {
       limbs,
       decapitated: this.rider.decapitated,
       wrecked: info.wrecked,
-      poop: this.poop && !O.survived && this.goreStyle !== 'cartoon',
+      poop: (this.poop || this.forced === 'banana') && !O.survived && this.goreStyle !== 'cartoon',
     });
   }
 
@@ -1205,6 +1542,7 @@ export class Drop {
     const x1 = this.cam.x + W / S / 2 + 2;
     art.drawUpstream(ctx, this.t, lw, this.cheats.disco);
     art.drawCliff(ctx, this.t, lw);
+    this.drawCaveMouth(ctx, lw);
     art.drawSheet(ctx, this.t, lw, this.cheats.disco);
     art.drawPoolBack(ctx, this.t, x0, x1);
     art.drawBoat(ctx, this.boatX, this.t, lw, this.flags.survived || this.flags.gooseCheer);
@@ -1237,6 +1575,10 @@ export class Drop {
     ctx.restore();
 
     this.fx.renderTexts(ctx, proj);
+    if (this.stage === 'cave') {
+      this.drawCaveScene(ctx);
+      return;
+    }
     this.splat.render(ctx, W, H);
     this.drawOverlay(ctx, proj);
   }
@@ -1344,6 +1686,14 @@ export class Drop {
       ctx.ellipse(B.cx - 0.35, B.cy - 0.45, 0.25, 0.1, -0.6, 0, TAU);
       ctx.fill();
     }
+    // the bear that eats your remains
+    if (this.sideBear) {
+      const B = this.sideBear;
+      ctx.save();
+      ctx.translate(B.x, POOL_Y + 0.8 + (1 - B.rise) * 3.5);
+      drawBear(ctx, 1, this.t, { mouth: B.mouth, scale: 2.3, bloody: B.ate ? 1 : 0, lw: (lw * 100) / 2.3 });
+      ctx.restore();
+    }
     // cartoon ghost
     if (this.ghost && this.ghost.t > 0.8) {
       const k = this.ghost.t - 0.8;
@@ -1387,7 +1737,7 @@ export class Drop {
     if (this.charred) ctx.filter = 'brightness(0.45)';
     const cut = this.ch.kind === 'giraffe' ? -130 : -95;
     ctx.translate(0, (-cut / 100) * (this.ch.scale || 1));
-    drawUpright(ctx, this.ch, 1, { pose: 'cheer', expr: this.charred ? 'dizzy' : 'happy', t: this.t, cutY: cut, lw: lw * 100, lifejacket: this.craftId === 'lifejacket', bigHead: this.cheats.bigHead });
+    drawUpright(ctx, this.ch, 1, { pose: 'cheer', expr: this.charred ? 'dizzy' : 'happy', t: this.t, cutY: cut, lw: lw * 100, lifejacket: this.craftId === 'lifejacket' && this.rider.opts.lifejacket !== false, bigHead: this.cheats.bigHead });
     ctx.restore();
     if (this.gary) {
       ctx.save();
@@ -1409,9 +1759,9 @@ export class Drop {
       const m = M.inf ? M.inf.m : 0;
       bigText(ctx, 'INFLATE THE VEST!', W / 2, H * 0.2, head, '#ff9a3b');
       bigText(ctx, touch ? 'HOLD THE BUTTON, LET GO IN THE GREEN' : 'HOLD SPACE, LET GO IN THE GREEN', W / 2, H * 0.2 + 30, sub, '#fff');
-      const gx = Math.min(W - 60, cp.x + 90);
-      const gy0 = cp.y - 90;
-      const gh = 180;
+      const gh = Math.min(180, H * 0.4);
+      const gx = touch ? W - btnR * 2 - 52 : W - 70;
+      const gy0 = Math.max(H * 0.2 + 56, H - btnR * 2 - 90 - gh);
       const y = (v) => gy0 + gh - v * gh;
       ctx.fillStyle = 'rgba(10,15,40,0.7)';
       roundRect(ctx, gx - 14, gy0 - 4, 28, gh + 8, 10);
@@ -1536,7 +1886,7 @@ export class Drop {
     }
     // kayak tilt gauge
     if (mode === 'boof' && this.stage === 'fall' && !this.outcome && this.body) {
-      const gx = 70;
+      const gx = touch ? W - 70 : 70;
       const gy = H * 0.5;
       ctx.save();
       ctx.lineWidth = 10;
@@ -1595,14 +1945,10 @@ export class Drop {
       const bot = H * 0.75;
       const bx = 34;
       const z = (y) => top + ((bot - top) * y) / POOL_Y;
-      ctx.fillStyle = 'rgba(255,90,90,0.8)';
-      ctx.fillRect(bx, z(0), 16, z(3) - z(0));
-      ctx.fillStyle = 'rgba(93,255,138,0.85)';
-      ctx.fillRect(bx, z(3), 16, z(22) - z(3));
-      ctx.fillStyle = 'rgba(255,210,59,0.85)';
-      ctx.fillRect(bx, z(22), 16, z(36) - z(22));
-      ctx.fillStyle = 'rgba(255,90,90,0.8)';
-      ctx.fillRect(bx, z(36), 16, z(POOL_Y) - z(36));
+      [[0, 3, 'rgba(255,90,90,0.85)'], [3, 8, 'rgba(255,210,59,0.85)'], [8, 16, 'rgba(93,255,138,0.9)'], [16, 28, 'rgba(255,210,59,0.85)'], [28, POOL_Y, 'rgba(255,90,90,0.85)']].forEach(([a0, a1, col]) => {
+        ctx.fillStyle = col;
+        ctx.fillRect(bx, z(a0), 16, z(a1) - z(a0));
+      });
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = '#1a1030';
       ctx.lineWidth = 3;
@@ -1637,7 +1983,8 @@ export class Drop {
     } else {
       this.g.input.setButtons([]);
     }
-    if (this.stage === 'approach') bigText(ctx, this.info.ko ? 'OUT COLD...' : 'HERE IT COMES...', W / 2, H * 0.22, Math.min(34, W * 0.07), '#fff');
+    if (touch && this.g.input.joyEnabled && this.stage === 'fall') drawJoystick(ctx, this.g.input);
+    if (this.stage === 'approach') bigText(ctx, this.forced ? 'DEAD ON ARRIVAL...' : this.info.ko ? 'OUT COLD...' : 'HERE IT COMES...', W / 2, H * 0.22, Math.min(34, W * 0.07), '#fff');
     if (this.stage === 'after') {
       const O = this.outcome;
       const k = Math.min(1, this.stageT * 2);
