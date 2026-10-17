@@ -8,7 +8,7 @@ import '@fontsource/nunito/900.css';
 import './styles.css';
 import App from './App.jsx';
 
-// Router basename comes from Vite's `base` (/game/), so routes work at yourdomain.com/game/...
+// Router basename comes from Vite's `base` (/games/niagaraorbust/ in production, /game/ locally)
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 ReactDOM.createRoot(document.getElementById('root')).render(

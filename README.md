@@ -72,7 +72,7 @@ Knocked out in the river? You come to after 5 seconds.
 
 ## Tech
 
-* Vite + React 18 + React Router 6 (basename `/game`).
+* Vite + React 18 + React Router 6 (the basename follows Vite's `base`: `/games/niagaraorbust/` in production, `/game/` locally).
 * All game rendering is hand-drawn vector art on a 2D `<canvas>`, so there are no image assets.
 * A custom Verlet physics engine runs the ragdolls, with breakable joints for the gore.
 * The whole soundtrack and every sound effect are **synthesized live with the Web Audio API**. There are no audio files.
@@ -95,6 +95,6 @@ npm run dev     # dev server (also on your LAN)
 npm run play    # production build + LAN server at http://<your-ip>:5173/game/
 ```
 
-See **[DEPLOY.md](DEPLOY.md)** for publishing it at `yourdomain.com/game` on Firebase Hosting.
+Play it at **https://kidstabletheband.com/games/niagaraorbust/**. See **[DEPLOY.md](DEPLOY.md)** for how it's published and how to ship updates.
 
 *Going over Niagara Falls is illegal and extremely dangerous. This is a cartoon. Stay on the bank and buy a hot dog.*

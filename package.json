@@ -7,8 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host --port 5173 --strictPort",
-    "play": "vite build && vite preview --host --port 5173 --strictPort",
-    "copy:kt": "node scripts/copy-to-kt.mjs"
+    "play": "vite build && vite preview --host --port 5173 --strictPort"
   },
   "dependencies": {
     "@fontsource/luckiest-guy": "^5.3.0",
