@@ -99,9 +99,11 @@ function Loadout({ onStart }) {
           <div className="who">{ch.name}</div>
           <div className="what">{save.cheats.salmon ? 'as a SALMON' : `in: ${cr.name}`}</div>
         </div>
-        <button className={`hard-chip ${save.settings.hard ? 'on' : ''}`} onClick={() => { audio.click(); setSetting('hard', !save.settings.hard); }} title="Tourists can shoot you before the falls">
-          😈 HARD {save.settings.hard ? 'ON' : 'OFF'}
-        </button>
+        {!save.cheats.salmon && (
+          <button className={`hard-chip ${save.settings.hard ? 'on' : ''}`} onClick={() => { audio.click(); setSetting('hard', !save.settings.hard); }} title="Tourists can shoot you before the falls">
+            😈 HARD {save.settings.hard ? 'ON' : 'OFF'}
+          </button>
+        )}
         <button className="btn go-main" disabled={!chOk || !crOk} onClick={onStart}>
           GO! 🌊
         </button>

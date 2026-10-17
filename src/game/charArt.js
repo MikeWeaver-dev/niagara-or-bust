@@ -9,6 +9,9 @@ const SOFT = 'rgba(32,18,24,0.78)';
 const EYES = { annie: '#5d7fa3', timmy: '#5b8a3c', bobby: '#4a2e1a', jean: '#3b5f86', gary: '#3a6e8e', kacey: '#3a2416', tourist: '#4a3420' };
 const LIP = (skin) => shade(skin, -0.28);
 
+// Canadian border services officer (Kacey's biggest fan)
+export const BORDER_AGENT = { id: 'tourist', kind: 'human', scale: 1.05, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#e0b08a', hair: '#3a2a1a', shirt: '#1d2b4f', shirt2: '#1d2b4f', collar: '#c8a040', pants: '#1d2b4f', shoes: '#111', hat: '#1d2b4f', hatBand: '#c8a040', accent: '#c8a040' } };
+
 export const GARY = {
   id: 'gary',
   name: 'Gary',
@@ -1942,7 +1945,9 @@ export function drawCat(ctx, S, t) {
 }
 
 // Big grizzly (3/4 front), rising out of the water. bloody: 0..1
-export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOverride } = {}) {
+export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOverride, gore = 'blood' } = {}) {
+  // what's dripping off the bear: blood, or (after a diarrhea death) something worse
+  const goo = gore === 'poop' ? ['rgba(82,52,14,0.88)', 'rgba(96,62,18,0.9)', '#5a3a12'] : ['rgba(110,0,8,0.85)', 'rgba(120,0,8,0.88)', '#8a1a1a'];
   ctx.save();
   ctx.scale((S / 100) * scale, (S / 100) * scale);
   const lw = lwOverride ?? Math.max(1.6, 180 / (S * scale));
@@ -1981,7 +1986,7 @@ export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOv
     ctx.fill();
     ctx.stroke();
     for (let k = -2; k <= 2; k++) {
-      ctx.fillStyle = bloody ? '#8a1a1a' : '#e8e0c8';
+      ctx.fillStyle = bloody ? goo[2] : '#e8e0c8';
       ctx.beginPath();
       ctx.moveTo(s * 10 + k * 6 - 2, -60);
       ctx.quadraticCurveTo(s * 10 + k * 6, -74, s * 10 + k * 7 + 3, -76);
@@ -2004,7 +2009,7 @@ export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOv
   ctx.ellipse(0, -25, 34, 32, 0, 0, TAU);
   ctx.fill();
   if (bloody) {
-    ctx.fillStyle = 'rgba(110,0,8,0.85)';
+    ctx.fillStyle = goo[0];
     ctx.beginPath();
     ctx.moveTo(-22, -70);
     ctx.quadraticCurveTo(-30, -20, -14, 8);
@@ -2094,7 +2099,7 @@ export function drawBear(ctx, S, t, { mouth = 0, scale = 1, bloody = 0, lw: lwOv
     ctx.fill();
   }
   if (bloody) {
-    ctx.fillStyle = 'rgba(120,0,8,0.88)';
+    ctx.fillStyle = goo[1];
     ctx.beginPath();
     ctx.ellipse(-8, hy + 14, 16, 8 + mouth * 6, 0.2, 0, TAU);
     ctx.fill();

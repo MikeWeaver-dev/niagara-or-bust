@@ -759,7 +759,8 @@ export class Splatter {
       const y = s.y * H;
       const r = s.r * m;
       ctx.fillStyle = s.color;
-      // smooth blobby outline through the midpoints of the jittered rim
+      // blob, satellite droplets and drips are ONE path filled once (all wound clockwise), so overlaps
+      // don't stack into darker spots that read as cartoon eyes
       const pts = s.verts.map((k, i) => {
         const a = (i / s.verts.length) * TAU;
         return [x + Math.cos(a) * r * k, y + Math.sin(a) * r * k];
@@ -773,28 +774,24 @@ export class Splatter {
         ctx.quadraticCurveTo(p0[0], p0[1], (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2);
       }
       ctx.closePath();
-      ctx.fill();
       s.sats.forEach((t) => {
-        ctx.beginPath();
-        ctx.arc(x + Math.cos(t.a) * r * t.d, y + Math.sin(t.a) * r * t.d, r * t.r, 0, TAU);
-        ctx.fill();
+        const cx = x + Math.cos(t.a) * r * t.d;
+        const cy = y + Math.sin(t.a) * r * t.d;
+        ctx.moveTo(cx + r * t.r, cy);
+        ctx.arc(cx, cy, r * t.r, 0, TAU);
+        ctx.closePath();
       });
       s.drips.forEach((d) => {
         const dx = x + d.dx * r;
         const len = d.len * H;
         const w = r * d.w;
-        ctx.beginPath();
-        ctx.moveTo(dx - w, y);
-        ctx.lineTo(dx - w * 0.6, y + len);
-        ctx.arc(dx, y + len, w * 0.75, Math.PI, 0, true);
-        ctx.lineTo(dx + w, y);
+        ctx.moveTo(dx + w, y);
+        ctx.lineTo(dx + w * 0.6, y + len);
+        ctx.arc(dx, y + len, w * 0.75, 0, Math.PI, false);
+        ctx.lineTo(dx - w, y);
         ctx.closePath();
-        ctx.fill();
       });
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
-      ctx.beginPath();
-      ctx.ellipse(x - r * 0.3, y - r * 0.3, r * 0.3, r * 0.15, -0.6, 0, TAU);
-      ctx.fill();
+      ctx.fill('nonzero');
     }
     ctx.globalAlpha = 1;
     if (this.vomitT > 0) drawVomitScreen(ctx, W, H, this.vomitT);

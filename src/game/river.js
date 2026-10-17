@@ -6,7 +6,7 @@ import { FX, Splatter, goreOf } from './fx.js';
 import { clamp, lerp, rand, rng, pick, approach, segDist, bigText, TAU, easeOutBack, roundRect } from './util.js';
 import { RW, RIVER_LEN, brinkAt, laneOf, LANE_NAME, LANE_BONUS, LANE_TIP, computeOdds, oddsColor } from './odds.js';
 import * as art from './riverArt.js';
-import { drawUpright, drawSalmonTop, drawBear, drawCat, GARY } from './charArt.js';
+import { drawUpright, drawSalmonTop, drawBear, drawCat, GARY, BORDER_AGENT as AGENT } from './charArt.js';
 import { drawCraftTop, kayakPaddle, canoePaddle } from './vesselArt.js';
 import { drawButton, drawJoystick, pill, bar, lumenIcon } from './hud.js';
 import { OUCH, SCREAMS, lastWords, VOICE_PITCH } from '../data/messages.js';
@@ -19,7 +19,6 @@ const SNIPERS = [
   { id: 'tourist', kind: 'human', scale: 1.1, headScale: 1, hat: 'none', extras: ['beard'], colors: { skin: '#c8906a', hair: '#2a1a10', shirt: '#5a6a3a', shirt2: '#3a4a2a', collar: '#fff', pants: '#4a4030', shoes: '#2a2018', hat: '#000', hatBand: '#000', accent: '#fff' } },
   { id: 'tourist', kind: 'human', scale: 0.98, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#8a5634', hair: '#1a1a1a', shirt: '#ffd23b', shirt2: '#fff', collar: '#fff', pants: '#2b3a67', shoes: '#fff', hat: '#2456b8', hatBand: '#fff', accent: '#fff' } },
 ];
-const AGENT = { id: 'tourist', kind: 'human', scale: 1.05, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#e0b08a', hair: '#3a2a1a', shirt: '#1d2b4f', shirt2: '#1d2b4f', collar: '#c8a040', pants: '#1d2b4f', shoes: '#111', hat: '#1d2b4f', hatBand: '#c8a040', accent: '#c8a040' } };
 const BODY_HP = 60;
 const ENTER_HOP = { nothing: 0.6, lifejacket: 1.9, surfboard: 1.1, barrel: 0.9, kayak: 0.35, canoe: 0.35, hamster: 1.0, jetski: 1.7, goose: 1.3, salmon: 1.4 };
 const DEBRIS_KINDS = ['tire', 'duck', 'cone', 'cart', 'flamingo', 'crate'];
@@ -70,10 +69,13 @@ export class River {
     this.mauler = null;
     // 1% flukes: lightning, or a bear that just... gets you
     this.fluke = null;
+    // (the Golden Goose, God Mode and Invincible Hull are immune: the cheats still make it happen, you just shrug it off)
+    this.immune = !!(craft.alwaysSurvive || cheats.god || cheats.invincible);
     if (!this.salmon) {
-      const roll = Math.random();
-      if (cheats.lightning || roll < 0.01) this.fluke = { kind: 'lightning', at: rand(5, 14) };
-      else if (cheats.randomBear || roll < 0.02) this.fluke = { kind: 'bear', at: rand(5, 14) };
+      const roll = this.immune ? 1 : Math.random();
+      const at = cheats.skipToEdge ? rand(0.6, 1.4) : rand(5, 14);
+      if (cheats.lightning || roll < 0.01) this.fluke = { kind: 'lightning', at };
+      else if (cheats.randomBear || roll < 0.02) this.fluke = { kind: 'bear', at };
     }
     // Kacey's admirer: a border agent on a rock right at the lip, placed on whichever side you'll pass
     this.agent = character.id === 'kacey' && !this.salmon ? { type: 'agent', x: -RW + 1, d: brinkAt(-RW + 1) - 1.4, verts: [1, 0.9, 1.05, 0.95, 1.1, 0.92, 1, 0.97] } : null;
@@ -172,7 +174,8 @@ export class River {
       const side = r() < 0.5 ? -1 : 1;
       this.props.push({ type: 'shooter', x: side * (RW + 1.4), d: d0 + r() * CHUNK, weapon: r() < 0.5 ? 'slingshot' : 'bb', cd: 1 + r() * 2, dead: false, seed: Math.floor(r() * 1e6), aim: 0 });
     }
-    if (this.hard && c === 3) add({ type: 'slingshot', x: (r() * 2 - 1) * RW * 0.5, d: d0 + 8 });
+    // a slingshot floats by every ~100 m until you grab one
+    if (this.hard && c % 6 === 3 && !(this.p && this.p.slingshot)) add({ type: 'slingshot', x: (r() * 2 - 1) * RW * 0.5, d: d0 + 8 });
     // lumens to collect
     const patterns = this.cheats.lumenRain ? 4 : r() < 0.85 ? 1 : 2;
     for (let k = 0; k < patterns; k++) {
@@ -433,6 +436,7 @@ export class River {
     p.cd = Math.max(0, p.cd - dt);
     p.abil = Math.max(0, p.abil - dt);
     p.invuln = Math.max(0, p.invuln - dt);
+    p.ghost = Math.max(0, (p.ghost || 0) - dt);
     p.hitT = Math.max(0, p.hitT - dt);
     p.spin = Math.max(0, p.spin - dt * 0.6);
     p.pooped = Math.max(0, p.pooped - dt);
@@ -451,6 +455,7 @@ export class River {
 
     if (p.dead) {
       // a limp corpse rides the current over the edge, sliding past every rock
+      p.deadT = (p.deadT || 0) + dt;
       p.vx *= Math.exp(-1.5 * dt);
       if (Math.abs(p.x) > RW * 0.6) p.vx -= Math.sign(p.x) * 2 * dt;
       p.vd = approach(p.vd, this.currentAt(p.x, p.d) * 1.6 + 1, 2, dt);
@@ -567,16 +572,19 @@ export class River {
     if (this.hard) this.updateShooters(dt, inp);
     if (p.dead) return;
 
-    // anti-stuck: no real progress for 1.5s? the river hops you over whatever is pinning you
+    // anti-stuck: no real progress for 1.2s (pinned on rocks, KO'd against the wall, idle in a whirlpool)?
+    // the current washes you free: you slide past every obstacle for a moment, toward open water
     if (!this.salmon) {
       if (!p.prog) p.prog = { d: p.d, t: 0 };
       p.prog.t += dt;
-      if (p.d - p.prog.d > 1) p.prog = { d: p.d, t: 0 };
-      else if (p.prog.t > 1.5) {
+      if (p.d - p.prog.d > 1.2) p.prog = { d: p.d, t: 0 };
+      else if (p.prog.t > 1.2) {
         p.prog = { d: p.d, t: 0 };
-        p.vz = 6;
-        p.vd = Math.max(p.vd, 4);
-        p.vx += (p.x > 0 ? -1 : 1) * 3;
+        p.ghost = 1.4;
+        p.invuln = Math.max(p.invuln, 1.6);
+        p.vz = Math.max(p.vz, 3.5);
+        p.vd = Math.max(p.vd, 6);
+        if (Math.abs(p.x) > 1.5) p.vx = -Math.sign(p.x) * 4;
       }
     }
 
@@ -685,6 +693,8 @@ export class River {
         }
         continue;
       }
+      // washing free of a snag: slide past everything for a moment
+      if (p.ghost > 0) continue;
       if (o.type === 'whirl') {
         const dx = p.x - o.x;
         const dd = p.d - o.d;
@@ -776,7 +786,8 @@ export class River {
     }
     // the current washes you around obstacles instead of pinning you behind them
     if (o.type === 'rock') {
-      const away = Math.abs(nx) > 0.15 ? Math.sign(nx) : p.x > 0 ? -1 : 1;
+      // near a bank wall, always wash toward the middle so you can't get wedged against the wall
+      const away = Math.abs(p.x) > RW - 2.8 ? -Math.sign(p.x) : Math.abs(nx) > 0.15 ? Math.sign(nx) : p.x > 0 ? -1 : 1;
       p.vx += away * 2.2;
     }
     if (p.invuln > 0) return;
@@ -830,6 +841,7 @@ export class River {
   damage(amount, cause, lethal = false) {
     const p = this.p;
     if (p.dead || this.cheats.invincible || this.salmon || (this.craft.id === 'goose' && !p.wrecked)) return;
+    if (this.cheats.god) lethal = false; // God Mode: shots can knock you out, never kill you
     if (p.ko && !lethal) return; // no kicking someone while they're down
     p.hp -= amount;
     p.hitT = 0.5;
@@ -906,7 +918,10 @@ export class River {
         p.charred = true;
         this.fx.smoke(p.x, p.d, 12);
         this.fx.sparkles(p.x, p.d, 20, 1, ['#ffffff', '#bfe9ff', '#fff6a0']);
-        this.die('lightning');
+        if (this.immune) {
+          this.say(this.craft.alwaysSurvive ? 'THE GOOSE ATE THE LIGHTNING' : 'ZAPPED... AND TOTALLY FINE?!', '#fff6a0', 26);
+          audio.honk();
+        } else this.die('lightning');
       } else {
         const side = p.x < 0 ? -1 : 1;
         this.mauler = { x: side * (RW + 3), d: p.d + 3, x0: side * (RW + 3), t: 0, hit: false, mouth: 0 };
@@ -928,6 +943,14 @@ export class River {
         M.d = lerp(p.d + 3, p.d + 0.6, k);
         M.z = Math.sin(k * Math.PI) * 2.5;
         M.mouth = k;
+      } else if (!M.hit && this.immune) {
+        // bounces right off
+        M.hit = true;
+        M.z = 0;
+        M.t = Math.max(M.t, 1.6);
+        audio.bonk();
+        if (this.craft.alwaysSurvive) audio.honk();
+        this.say(this.craft.alwaysSurvive ? 'THE GOOSE HONKED THE BEAR AWAY' : 'THE BEAR BOUNCED OFF!', '#ffd23b', 26);
       } else if (!M.hit) {
         M.hit = true;
         M.z = 0;
@@ -961,7 +984,11 @@ export class River {
     const p = this.p;
     p.shootCd = Math.max(0, (p.shootCd || 0) - dt);
     for (const sh of this.props) {
-      if (sh.type !== 'shooter' || sh.dead) continue;
+      if (sh.type !== 'shooter') continue;
+      if (sh.dead) {
+        sh.deadT = (sh.deadT || 0) + dt;
+        continue;
+      }
       sh.aim = Math.max(0, sh.aim - dt);
       if (Math.abs(sh.d - p.d) > 15 || p.dead) continue;
       sh.cd -= dt;
@@ -1075,6 +1102,43 @@ export class River {
     if (v && (v.sx(sh.x) < 0 || v.sx(sh.x) > this.g.W)) this.say(msg, '#ffd23b', 26);
   }
 
+  // narrow phones can't see the banks, so pin a marker to the screen edge for every shooter beside you
+  drawShooterMarkers(ctx, v) {
+    const { W, H, sx, sy, S, t } = v;
+    for (const sh of this.props) {
+      if (sh.type !== 'shooter' || sh.d < v.dMin || sh.d > v.dMax) continue;
+      if (sh.dead && (sh.deadT || 0) > 1.8) continue;
+      const x = sx(sh.x);
+      if (x > S * 0.4 && x < W - S * 0.4) continue;
+      const side = x < W / 2 ? -1 : 1;
+      const my = clamp(sy(sh.d) - S * 0.6, 120, H - 70);
+      const hot = !sh.dead && sh.aim > 0;
+      ctx.save();
+      ctx.translate(side < 0 ? 20 : W - 48, my); // (right side clears the falls progress bar)
+      ctx.scale(hot ? 1.25 : 1, hot ? 1.25 : 1);
+      ctx.fillStyle = sh.dead ? 'rgba(30,24,40,0.9)' : hot ? '#ff3b3b' : 'rgba(200,30,46,0.9)';
+      ctx.strokeStyle = '#1a1030';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(side * 9, -9);
+      ctx.lineTo(side * 21, 0);
+      ctx.lineTo(side * 9, 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = sh.dead ? Math.max(0, 1 - (sh.deadT || 0) / 1.8) : 1;
+      ctx.fillText(sh.dead ? '💀' : sh.weapon === 'bb' ? '🔫' : '😈', 0, 1 + (hot ? Math.sin(t * 40) : 0));
+      ctx.restore();
+    }
+  }
+
   drawShooter(ctx, v, sh) {
     const { sx, sy, S, t } = v;
     const ch = SNIPERS[sh.seed % SNIPERS.length];
@@ -1147,12 +1211,15 @@ export class River {
     const A = this.agent;
     const p = this.p;
     if (!A || A.frozen) return;
-    if (A.d - p.d < 24) {
+    // freeze just before it scrolls into view (so it never visibly slides)
+    const v = this.view;
+    if (v ? A.d < v.dMax : A.d - p.d < 24) {
       A.frozen = true;
       return;
     }
-    const side = p.x > RW - 4.5 ? 1 : -1;
-    A.x = clamp(p.x + side * 4.2, -RW + 0.6, RW - 0.6);
+    // stand close beside your line (Canadian side by default) so it stays on even a narrow phone screen
+    const side = p.x < -RW + 4 ? 1 : -1;
+    A.x = clamp(p.x + side * 3.1, -RW + 0.6, RW - 0.6);
     A.d = brinkAt(A.x) - 1.4;
   }
 
@@ -1732,6 +1799,7 @@ export class River {
       ctx.fillStyle = `rgba(230,240,255,${this.flash * 0.85})`;
       ctx.fillRect(0, 0, W, H);
     }
+    if (this.hard) this.drawShooterMarkers(ctx, v);
     if (this.cheats.disco) art.drawDiscoLights(ctx, W, H, this.t);
     if (this.mode === 'brink') {
       const k = clamp(this.modeT / 1.35, 0, 1);
@@ -1809,7 +1877,8 @@ export class River {
     const tilt = this.mode === 'river' ? clamp(p.vx * 0.035, -0.25, 0.25) : 0;
     ctx.rotate(tilt + p.rot + (p.spin > 0 ? this.t * 9 * Math.min(1, p.spin) : 0));
     if (this.salmon) {
-      drawSalmonTop(ctx, S * 1.1, t);
+      // nose pointing upstream (down the screen), the way it's swimming
+      drawSalmonTop(ctx, S * 1.1, t, { flip: true });
     } else if (this.mode === 'bank' || (this.mode === 'entering' && this.modeT < 0.5)) {
       // on the beach, every vessel gets hauled to the water its own way
       const id = this.craft.id;
@@ -2010,9 +2079,11 @@ export class River {
     if (this.mode === 'bank') {
       const lane = laneOf(p.x);
       const msg = this.salmon ? 'TAP TO FLOP INTO THE RIVER' : `PICK YOUR SPOT: ${LANE_NAME[lane]}`;
-      bigText(ctx, msg, W / 2, H * 0.17, Math.min(26, W * 0.055), '#fff');
+      // (kept below the lane readout under the odds pill, even on a short landscape screen)
+      const my = Math.max(H * 0.17, 96);
+      bigText(ctx, msg, W / 2, my, Math.min(26, W * 0.055), '#fff');
       if (!this.salmon) {
-        bigText(ctx, LANE_TIP[lane], W / 2, H * 0.17 + 28, Math.min(17, W * 0.04), lane === 'center' ? '#5dff8a' : lane === 'edge' ? '#ff8a8a' : '#ffd23b');
+        bigText(ctx, LANE_TIP[lane], W / 2, my + 28, Math.min(17, W * 0.04), lane === 'center' ? '#5dff8a' : lane === 'edge' ? '#ff8a8a' : '#ffd23b');
         // path arrow showing where you'd enter
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.7)';
@@ -2039,7 +2110,8 @@ export class River {
       const ab = p.wrecked ? { name: 'PANIC!', cd: 4.5 } : this.craft.ability;
       if (p.dead) {
         this.g.input.setButtons([]);
-        bigText(ctx, DEATH_LABEL[p.deadCause] || 'DEAD', W / 2, H - 66, Math.min(26, W * 0.06), '#ff5a5a');
+        // the cause pops up over the body first; once that fades it stays pinned at the top
+        if ((p.deadT || 0) > 2.4) bigText(ctx, DEATH_LABEL[p.deadCause] || 'DEAD', W / 2, 92, Math.min(24, W * 0.055), '#ff5a5a');
         bigText(ctx, '...STILL FLOATING TOWARD THE FALLS', W / 2, H - 36, Math.min(17, W * 0.04), '#ffb0b0');
       } else if (touch) {
         btn.label = ab.name;

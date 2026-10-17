@@ -6,7 +6,7 @@ import { FX, Splatter, goreOf } from './fx.js';
 import { Physics, makeBox, makeBall, attach } from './physics.js';
 import { buildHuman, buildGiraffe, breakBone, drawRagdoll, corePoint, poseRagdoll, LIMB_BONES, HEAD_BONE, SPINE_BONE } from './ragdoll.js';
 import { drawCraftSide, drawParachute, drawGooseSide } from './vesselArt.js';
-import { drawHead, drawUpright, drawBear, GARY, OUTLINE } from './charArt.js';
+import { drawHead, drawUpright, drawBear, GARY, OUTLINE, BORDER_AGENT } from './charArt.js';
 import { lastWords, VOICE_PITCH } from '../data/messages.js';
 import * as art from './dropArt.js';
 import { POOL_Y, LIP_DEPTH, cliffX, rockContains } from './dropArt.js';
@@ -21,6 +21,7 @@ const JOY_MODES = ['boof', 'surf', 'glide', 'aim'];
 const RING_BONUS = { perfect: 0.18, good: 0.09, ok: 0.03, miss: -0.05 };
 const DECIDE_Y = 33;
 const CAVE_Y0 = 20;
+const AGENT_X = -1.9; // Kacey's border agent, just upstream of the lip
 const CAVE_Y1 = 26;
 
 export class Drop {
@@ -485,8 +486,8 @@ export class Drop {
     const rag = this.rider;
     const style = this.goreStyle;
     const gore = this.cheats.goreGalore || this.forced === 'banana' ? 'galore' : this.settings.gore;
-    // famous last words (Chrome's built-in voice, pitched per character)
-    setTimeout(() => audio.say(lastWords(this.ch.id, this.poop), VOICE_PITCH[this.ch.id] || 1), 180);
+    // famous last words (Chrome's built-in voice, pitched per character); a corpse already said theirs in the river
+    if (!this.info.dead) setTimeout(() => audio.say(lastWords(this.ch.id, this.poop), VOICE_PITCH[this.ch.id] || 1), 180);
     if (this.gary) setTimeout(() => audio.say(lastWords('gary'), VOICE_PITCH.gary), 1700);
     if (cause === 'impaled' && style !== 'cartoon') this.impale();
     if (cause === 'pancake' && style !== 'cartoon') this.pancake();
@@ -633,6 +634,66 @@ export class Drop {
     this.fx.text('BANANA PEEL?!', x + 1, y - 2, '#ffd23b', 32, 0, 1.8);
   }
 
+  // Kacey's admirer from Canadian border services, standing on a rock right at the lip
+  drawAgentSide(ctx, lw) {
+    const x = AGENT_X;
+    ctx.save();
+    ctx.fillStyle = '#6e6862';
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(x - 0.75, 0.25);
+    ctx.quadraticCurveTo(x - 0.7, -0.32, x - 0.2, -0.38);
+    ctx.quadraticCurveTo(x + 0.45, -0.42, x + 0.7, 0.25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(x - 0.7 + Math.sin(this.t * 6) * 0.04, 0.05, 0.25, 0.1, 0, 0, TAU);
+    ctx.fill();
+    ctx.translate(x, -0.36);
+    drawUpright(ctx, BORDER_AGENT, 1, { pose: 'wave', expr: 'happy', t: this.t, lw: lw * 100 });
+    ctx.restore();
+  }
+
+  drawAgentBubble(ctx, proj) {
+    if (this.stage === 'cave' || this.stage === 'after') return;
+    const head = proj(AGENT_X, -2.5);
+    const { W, H } = this.g;
+    if (head.y < -40 || head.y > H + 40 || head.x < -200 || head.x > W + 200) return;
+    const text = 'Let me pet you!';
+    const fs = Math.max(14, Math.min(24, head.s * 0.42));
+    ctx.save();
+    ctx.font = `${fs}px "Luckiest Guy", sans-serif`;
+    const w = ctx.measureText(text).width + fs * 1.2;
+    const h = fs * 1.8;
+    const bx = clamp(head.x - w * 0.25, 8, W - w - 8);
+    // stay below the odds pill, and drop the bubble once the head scrolls up under the HUD
+    const by = Math.max(70, head.y - h - fs * 0.6 + Math.sin(this.t * 3) * 2);
+    if (head.y + 10 < by) return;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#1a1030';
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, bx, by, w, h, h / 2);
+    ctx.fill();
+    ctx.stroke();
+    const tx = clamp(head.x, bx + 14, bx + w - 30);
+    ctx.beginPath();
+    ctx.moveTo(tx, by + h - 1);
+    ctx.lineTo(head.x - 4, head.y - 4);
+    ctx.lineTo(tx + 16, by + h - 1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillRect(tx + 1, by + h - 4, 14, 6);
+    ctx.fillStyle = '#c8102e';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + fs * 0.6, by + h / 2 + 1);
+    ctx.restore();
+  }
+
   drawCaveMouth(ctx, lw) {
     const y0 = CAVE_Y0;
     const y1 = CAVE_Y1;
@@ -742,10 +803,12 @@ export class Drop {
       ctx.fill();
     }
     // Annie's sign
-    const sx = W * 0.42;
-    const bw = Math.min(W * 0.4, 380);
-    const bh = Math.min(H * 0.24, 170);
-    const by = ground - bh - S * 0.9;
+    // (on a tall phone the sign hangs high and wide so the goose doesn't cover it)
+    const portrait = H > W * 1.15;
+    const sx = portrait ? W * 0.5 : W * 0.42;
+    const bw = portrait ? W * 0.84 : Math.min(W * 0.4, 380);
+    const bh = portrait ? Math.min(H * 0.19, bw * 0.48) : Math.min(H * 0.24, 170);
+    const by = portrait ? H * 0.2 + 30 : ground - bh - S * 0.9;
     ctx.fillStyle = '#5a3a1e';
     ctx.fillRect(sx - 7, by + bh - 4, 14, ground - by - bh + 4);
     ctx.fillStyle = '#c99a5a';
@@ -809,7 +872,7 @@ export class Drop {
     }
     bigText(ctx, 'SECRET CAVE FOUND!', W / 2, H * 0.12, Math.min(40, W * 0.08), '#ffd23b');
     if (Cv.bonus) bigText(ctx, '+25 LUMENS', W / 2, H * 0.12 + 40, Math.min(24, W * 0.05), '#fff6b0');
-    if (Cv.slipped) bigText(ctx, 'WHOOPS.', W / 2, H * 0.35, Math.min(60, W * 0.12), '#ff5a5a');
+    if (Cv.slipped) bigText(ctx, 'WHOOPS.', W / 2, H > W * 1.15 ? H * 0.6 : H * 0.35, Math.min(60, W * 0.12), '#ff5a5a');
     else if (Cv.t > 2 && !Cv.exit) bigText(ctx, this.g.showTouch ? 'tap to leave the cave' : 'press space to leave the cave', W / 2, H - 30, 16, `rgba(255,255,255,${0.5 + Math.sin(t * 4) * 0.3})`);
   }
 
@@ -1130,19 +1193,21 @@ export class Drop {
       this.rider.expr = this.info.ko ? 'ko' : 'terrified';
       if (this.stageT > 6) this.flowV += dt * 6; // never get stuck before the lip
       if (c.x > 0.2) {
+        // a rider who is out cold (or already dead) can't play the mini-game, and corpses don't scream
+        const limp = this.info.ko || this.info.dead;
         this.stage = 'fall';
         this.stageT = 0;
-        this.rider.expr = this.info.ko ? 'ko' : 'scream';
-        audio.scream(this.ch.voice || 1, 1.8);
+        this.rider.expr = limp ? 'ko' : 'scream';
+        if (!this.info.dead) audio.scream(this.ch.voice || 1, 1.8);
         audio.whoosh(1.5);
         if (this.gary) setTimeout(() => audio.scream(0.9, 1.4), 200);
         if (this.cheats.slowmo) this.g.setTimeScale(0.4, 99);
-        if (mode === 'surf' && this.body) {
+        if (mode === 'surf' && this.body && !limp) {
           this.mini.surf = { riding: true, tau: 0.05, b: 0, vb: 0, inZone: 0, total: 0, wiped: false };
           this.body.pts.forEach((p) => (p.im = 0));
           this.g.setTimeScale(0.6, 2.4);
         }
-        if (mode === 'chute') this.mini.chute = { deployed: false, open: 0, canopy: null, torn: false, snagged: false, zone: null };
+        if (mode === 'chute' && !limp) this.mini.chute = { deployed: false, open: 0, canopy: null, torn: false, snagged: false, zone: null };
 
       }
       return;
@@ -1167,7 +1232,7 @@ export class Drop {
         }
       }
       if (MINI_MODES.includes(mode) && !this.info.ko && !this.outcome) this.updateMinis(dt, inp, c, mode);
-      if (this.craftId === 'goose' && this.body && !this.flags.cave && this.forced !== 'banana') {
+      if (this.craftId === 'goose' && this.body && !this.flags.cave && !this.forced && !this.info.ko) {
         const bx = this.body.cx;
         const by = this.body.cy;
         if (by > CAVE_Y0 - 0.6 && by < CAVE_Y1 + 0.4 && bx < cliffX(by) + 1.7) this.enterCave();
@@ -1258,7 +1323,7 @@ export class Drop {
       if (this.forced === 'banana' && !this.sideBear && this.stageT > 1.4) {
         this.sideBear = { x: corePoint(this.rider).x + 0.3, rise: 0, mouth: 0, t: 0, ate: false };
         audio.roar();
-        this.fx.text('...AND THEN A BEAR', this.sideBear.x, POOL_Y - 5, '#ff3b3b', 30, 0, 2.2);
+        this.bonusLabel = { text: '...AND THEN A BEAR', color: '#ff3b3b', t: 2.4 };
       }
       if (this.sideBear) {
         const B = this.sideBear;
@@ -1286,7 +1351,8 @@ export class Drop {
         }
       }
       const doneAt = O.survived ? 4.2 : this.forced === 'banana' ? 6.4 : 3.6;
-      const skip = this.stageT > 1.6 && (inp.pressed('primary') || inp.tapped);
+      // (the banana-cave bear gets to finish its meal before you can skip)
+      const skip = this.stageT > (this.forced === 'banana' ? 3.1 : 1.6) && (inp.pressed('primary') || inp.tapped);
       if ((this.stageT > doneAt || skip) && !this.flags.finished) {
         this.flags.finished = true;
         this.finish();
@@ -1512,7 +1578,7 @@ export class Drop {
       survived: O.survived,
       cause: this.forced || O.cause,
       odds: O.odds,
-      roll: O.roll,
+      roll: this.forced ? undefined : O.roll, // no dice were rolled for a corpse or a banana
       lane: info.lane,
       lumensBase: total,
       breakdown,
@@ -1573,6 +1639,7 @@ export class Drop {
     art.drawBoat(ctx, this.boatX, this.t, lw, this.flags.survived || this.flags.gooseCheer);
     art.drawMistPuffs(ctx, this.t, this.cam.x, this.cam.y, this.stage === 'after' ? 0.9 : 0.6);
     art.drawRocks(ctx, this.rocks, lw);
+    if (this.ch.id === 'kacey') this.drawAgentSide(ctx, lw);
     if (this.mini.aim && !this.outcome) {
       const A = this.mini.aim;
       ctx.fillStyle = 'rgba(40,230,120,0.32)';
@@ -1605,6 +1672,7 @@ export class Drop {
       return;
     }
     this.splat.render(ctx, W, H);
+    if (this.ch.id === 'kacey') this.drawAgentBubble(ctx, proj);
     this.drawOverlay(ctx, proj);
   }
 
@@ -1716,7 +1784,7 @@ export class Drop {
       const B = this.sideBear;
       ctx.save();
       ctx.translate(B.x, POOL_Y + 0.8 + (1 - B.rise) * 3.5);
-      drawBear(ctx, 1, this.t, { mouth: B.mouth, scale: 2.3, bloody: B.ate ? 1 : 0, lw: (lw * 100) / 2.3 });
+      drawBear(ctx, 1, this.t, { mouth: B.mouth, scale: 2.3, bloody: B.ate ? 1 : 0, lw: (lw * 100) / 2.3, gore: this.rider.goreStyle === 'poop' ? 'poop' : 'blood' });
       ctx.restore();
     }
     // cartoon ghost
@@ -1914,24 +1982,38 @@ export class Drop {
       const gx = touch ? W - 70 : 70;
       const gy = H * 0.5;
       ctx.save();
+      // dark backing plate so the gauge reads against the white falls
+      ctx.fillStyle = 'rgba(20,14,40,0.62)';
+      ctx.strokeStyle = '#1a1030';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 66, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
       ctx.lineWidth = 10;
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
       ctx.beginPath();
       ctx.arc(gx, gy, 46, -Math.PI / 2, Math.PI / 2);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(93,255,138,0.85)';
+      ctx.strokeStyle = 'rgba(93,255,138,0.95)';
       ctx.beginPath();
       ctx.arc(gx, gy, 46, (20 * Math.PI) / 180, (65 * Math.PI) / 180);
       ctx.stroke();
-      const a = ((this.mini.kayakDeg || 0) * Math.PI) / 180;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 4;
+      const deg = this.mini.kayakDeg || 0;
+      const a = (deg * Math.PI) / 180;
+      ctx.strokeStyle = deg > 20 && deg < 65 ? '#5dff8a' : '#ffd23b';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(gx, gy);
       ctx.lineTo(gx + Math.cos(a) * 58, gy + Math.sin(a) * 58);
       ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(gx, gy, 5, 0, TAU);
+      ctx.fill();
       ctx.restore();
-      bigText(ctx, 'NOSE ANGLE', gx, gy - 64, 14);
+      bigText(ctx, 'NOSE ANGLE', gx, gy - 78, 14);
       if (!R) bigText(ctx, touch ? '◀ ▶ DRAG TO TILT THE NOSE INTO THE GREEN' : '◀ ▶ TILT THE NOSE INTO THE GREEN', W / 2, H * 0.2, Math.min(22, W * 0.045), '#fff');
     }
     // surf balance meter
@@ -1997,7 +2079,7 @@ export class Drop {
       drawButton(ctx, btn, { color: '#2bb673', pulse: Math.sin(t * 8) });
     } else if (MINI_MODES.includes(mode) && this.stage === 'fall' && !this.mini.done && !this.info.ko) {
       this.drawMiniUI(ctx, cp, touch, btnR);
-    } else if (mode === 'glide' && this.stage === 'fall' && this.forced !== 'banana') {
+    } else if (mode === 'glide' && this.stage === 'fall' && !this.forced) {
       bigText(ctx, touch ? 'HOLD FLAP TO FLOAT · DRAG TO STEER' : 'SPACE / ▲ FLAP · ◀ ▶ STEER', W / 2, H * 0.2, Math.min(20, W * 0.042), '#ffd23b');
       bigText(ctx, this.gooseTired ? 'THE GOOSE IS GETTING TIRED...' : 'THE GOOSE HAS YOU. RELAX.', W / 2, H * 0.2 + 26, 15, this.gooseTired ? '#ffb0b0' : '#fff');
       if (touch) {
@@ -2015,7 +2097,7 @@ export class Drop {
       const k = Math.min(1, this.stageT * 2);
       if (O.survived && this.stageT > 1.1) bigText(ctx, 'SURVIVED!', W / 2, H * 0.24, Math.min(64, W * 0.13) * easeOutBack(Math.min(1, (this.stageT - 1.1) * 2.5)), '#5dff8a');
       if (!O.survived && this.stageT > 0.5) bigText(ctx, this.goreStyle === 'cartoon' ? 'BONK.' : 'SPLAT.', W / 2, H * 0.24, Math.min(64, W * 0.13) * easeOutBack(Math.min(1, (this.stageT - 0.5) * 2.5)), '#ff5a5a');
-      if (this.stageT > 1.6) bigText(ctx, touch ? 'tap to continue' : 'press space to continue', W / 2, H - 40, 16, `rgba(255,255,255,${0.5 + Math.sin(t * 4) * 0.3})`);
+      if (this.stageT > (this.forced === 'banana' ? 3.1 : 1.6)) bigText(ctx, touch ? 'tap to continue' : 'press space to continue', W / 2, H - 40, 16, `rgba(255,255,255,${0.5 + Math.sin(t * 4) * 0.3})`);
       void k;
     }
     // slow-mo flash on impact
