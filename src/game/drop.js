@@ -662,31 +662,44 @@ export class Drop {
     const head = proj(AGENT_X, -2.5);
     const { W, H } = this.g;
     if (head.y < -40 || head.y > H + 40 || head.x < -200 || head.x > W + 200) return;
+    if (head.y < 30) return;
     const text = 'Let me pet you!';
     const fs = Math.max(14, Math.min(24, head.s * 0.42));
     ctx.save();
     ctx.font = `${fs}px "Luckiest Guy", sans-serif`;
     const w = ctx.measureText(text).width + fs * 1.2;
     const h = fs * 1.8;
-    const bx = clamp(head.x - w * 0.25, 8, W - w - 8);
-    // stay below the odds pill, and drop the bubble once the head scrolls up under the HUD
-    const by = Math.max(70, head.y - h - fs * 0.6 + Math.sin(this.t * 3) * 2);
-    if (head.y + 10 < by) return;
+    // above the head while there's room; once the head nears the top (under the HUD), hang it beside the head
+    let bx = clamp(head.x - w * 0.25, 8, W - w - 8);
+    let by = head.y - h - fs * 0.6 + Math.sin(this.t * 3) * 2;
+    const beside = by < 70;
+    if (beside) {
+      bx = clamp(head.x + fs * 1.2, 8, W - w - 8);
+      by = Math.max(70, head.y - h * 0.2);
+    }
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#1a1030';
     ctx.lineWidth = 2.5;
     roundRect(ctx, bx, by, w, h, h / 2);
     ctx.fill();
     ctx.stroke();
-    const tx = clamp(head.x, bx + 14, bx + w - 30);
+    // the tail points back at the agent's head
     ctx.beginPath();
-    ctx.moveTo(tx, by + h - 1);
-    ctx.lineTo(head.x - 4, head.y - 4);
-    ctx.lineTo(tx + 16, by + h - 1);
+    if (beside) {
+      ctx.moveTo(bx + 2, by + h * 0.35);
+      ctx.lineTo(head.x + 6, head.y);
+      ctx.lineTo(bx + 2, by + h * 0.7);
+    } else {
+      const tx = clamp(head.x, bx + 14, bx + w - 30);
+      ctx.moveTo(tx, by + h - 1);
+      ctx.lineTo(head.x - 4, head.y - 4);
+      ctx.lineTo(tx + 16, by + h - 1);
+    }
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillRect(tx + 1, by + h - 4, 14, 6);
+    if (beside) ctx.fillRect(bx - 1, by + h * 0.35 + 1, 6, h * 0.35 - 2);
+    else ctx.fillRect(clamp(head.x, bx + 14, bx + w - 30) + 1, by + h - 4, 14, 6);
     ctx.fillStyle = '#c8102e';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1270,7 +1283,7 @@ export class Drop {
       else if (ringMode || MINI_MODES.includes(mode)) ready = ((this.mini.ringDone || this.mini.done) && c.y > DECIDE_Y - 6) || c.y > DECIDE_Y + 4 || this.info.ko;
       else ready = c.y > DECIDE_Y;
       if (ready && !this.outcome) {
-        if (mode === 'boof') {
+        if (mode === 'boof' && !this.info.dead && !this.info.ko) {
           const frac = this.mini.kayakTotal > 0 ? this.mini.kayakZone / this.mini.kayakTotal : 0;
           this.addBonus(frac * 0.15, frac > 0.6 ? 'NICE LINE' : 'SKETCHY LINE', Math.round(frac * 5));
         }
@@ -1323,7 +1336,7 @@ export class Drop {
       if (this.forced === 'banana' && !this.sideBear && this.stageT > 1.4) {
         this.sideBear = { x: corePoint(this.rider).x + 0.3, rise: 0, mouth: 0, t: 0, ate: false };
         audio.roar();
-        this.bonusLabel = { text: '...AND THEN A BEAR', color: '#ff3b3b', t: 2.4 };
+
       }
       if (this.sideBear) {
         const B = this.sideBear;
@@ -1604,9 +1617,15 @@ export class Drop {
       tx = this.impact.x + (this.survivor ? 1.6 : 0.4);
       ty = POOL_Y - 1.4;
       metres = 7.5;
+      if (this.sideBear) {
+        // frame the whole bear, even on a narrow phone
+        tx = this.sideBear.x;
+        ty = POOL_Y - 2.4;
+        metres = 9;
+      }
     }
     const S = this.baseScale(metres);
-    this.cam.x = approach(this.cam.x, tx, this.stage === 'after' ? 3 : 6, dt);
+    this.cam.x = approach(this.cam.x, tx, this.sideBear ? 7 : this.stage === 'after' ? 3 : 6, dt);
     this.cam.y = approach(this.cam.y, ty, this.stage === 'after' ? 3 : 7, dt);
     this.cam.S = approach(this.cam.S, S, 2.5, dt);
   }
@@ -1980,7 +1999,7 @@ export class Drop {
     // kayak tilt gauge
     if (mode === 'boof' && this.stage === 'fall' && !this.outcome && this.body) {
       const gx = touch ? W - 70 : 70;
-      const gy = H * 0.5;
+      const gy = touch ? Math.max(120, Math.min(H * 0.5, H - btnR * 2 - 70 - 80)) : H * 0.5;
       ctx.save();
       // dark backing plate so the gauge reads against the white falls
       ctx.fillStyle = 'rgba(20,14,40,0.62)';
@@ -2096,6 +2115,7 @@ export class Drop {
       const O = this.outcome;
       const k = Math.min(1, this.stageT * 2);
       if (O.survived && this.stageT > 1.1) bigText(ctx, 'SURVIVED!', W / 2, H * 0.24, Math.min(64, W * 0.13) * easeOutBack(Math.min(1, (this.stageT - 1.1) * 2.5)), '#5dff8a');
+      if (this.sideBear && this.sideBear.t < 3) bigText(ctx, '...AND THEN A BEAR', W / 2, H - 82, Math.min(26, W * 0.06), '#ff3b3b');
       if (!O.survived && this.stageT > 0.5) bigText(ctx, this.goreStyle === 'cartoon' ? 'BONK.' : 'SPLAT.', W / 2, H * 0.24, Math.min(64, W * 0.13) * easeOutBack(Math.min(1, (this.stageT - 0.5) * 2.5)), '#ff5a5a');
       if (this.stageT > (this.forced === 'banana' ? 3.1 : 1.6)) bigText(ctx, touch ? 'tap to continue' : 'press space to continue', W / 2, H - 40, 16, `rgba(255,255,255,${0.5 + Math.sin(t * 4) * 0.3})`);
       void k;

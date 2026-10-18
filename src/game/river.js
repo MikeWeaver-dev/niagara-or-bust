@@ -437,6 +437,7 @@ export class River {
     p.abil = Math.max(0, p.abil - dt);
     p.invuln = Math.max(0, p.invuln - dt);
     p.ghost = Math.max(0, (p.ghost || 0) - dt);
+    p.touchT = (p.touchT ?? 9) + dt; // time since you last bumped a rock, log, wall or whirlpool
     p.hitT = Math.max(0, p.hitT - dt);
     p.spin = Math.max(0, p.spin - dt * 0.6);
     p.pooped = Math.max(0, p.pooped - dt);
@@ -565,6 +566,7 @@ export class River {
         if (Math.abs(p.vx) > 5) this.damage(Math.abs(p.vx) * 1.2, 'wall');
       }
       p.vx = -p.vx * 0.5;
+      p.touchT = 0;
     }
 
     this.collide(dt, turbo);
@@ -577,7 +579,8 @@ export class River {
     if (!this.salmon) {
       if (!p.prog) p.prog = { d: p.d, t: 0 };
       p.prog.t += dt;
-      if (p.d - p.prog.d > 1.2) p.prog = { d: p.d, t: 0 };
+      const snagged = p.touchT < 0.6 || p.ko;
+      if (p.d - p.prog.d > 1.0 || !snagged) p.prog = { d: p.d, t: 0 };
       else if (p.prog.t > 1.2) {
         p.prog = { d: p.d, t: 0 };
         p.ghost = 1.4;
@@ -705,6 +708,7 @@ export class River {
           p.vx -= (dx / (dist + 0.01)) * 4 * k * dt * 3;
           p.vd = approach(p.vd, p.vd * 0.4, 3 * k, dt);
           p.spin = Math.min(1.5, p.spin + dt * 2.2);
+          p.touchT = 0;
           if (!o.announced) {
             o.announced = true;
             this.say('WHIRLPOOL!', '#9ef', 22);
@@ -775,6 +779,7 @@ export class River {
   hit(o, nx, nd, overlap) {
     const p = this.p;
     const C = this.craft;
+    p.touchT = 0;
     p.x += nx * overlap;
     p.d += nd * overlap;
     const relV = p.vx * nx + p.vd * nd;
@@ -867,6 +872,11 @@ export class River {
       if (C.id === 'canoe') this.fx.text('GARY SWIMS AWAY', p.x + 2, p.d + 1.5, '#9ef', 16, 1, 2);
     } else if (lethal) {
       this.die(cause);
+    } else if (this.cheats.god) {
+      // God Mode: shrug it off instead of getting knocked out over and over
+      p.hp = p.maxHp * 0.5;
+      p.invuln = 1.5;
+      this.say('NOPE. GOD MODE.', '#ffd23b', 22);
     } else if (!p.ko) {
       p.ko = true;
       p.koT = 0;
@@ -1580,11 +1590,12 @@ export class River {
       if (b.life <= 0) continue;
       ctx.globalAlpha = Math.max(0, b.life) * 0.6;
       ctx.lineWidth = S * 0.12;
+      const tail = this.salmon ? 0.6 : -0.6; // the salmon faces upstream, so its tail is the other way
       [-1, 1].forEach((sd) => {
         const spread = (1 - b.life) * 1.6 + 0.4;
         ctx.beginPath();
-        ctx.moveTo(sx(a.x + sd * spread), sy(a.d - 0.6));
-        ctx.lineTo(sx(b.x + sd * spread), sy(b.d - 0.6));
+        ctx.moveTo(sx(a.x + sd * spread), sy(a.d + tail));
+        ctx.lineTo(sx(b.x + sd * spread), sy(b.d + tail));
         ctx.stroke();
       });
     }
@@ -2111,8 +2122,10 @@ export class River {
       if (p.dead) {
         this.g.input.setButtons([]);
         // the cause pops up over the body first; once that fades it stays pinned at the top
-        if ((p.deadT || 0) > 2.4) bigText(ctx, DEATH_LABEL[p.deadCause] || 'DEAD', W / 2, 92, Math.min(24, W * 0.055), '#ff5a5a');
-        bigText(ctx, '...STILL FLOATING TOWARD THE FALLS', W / 2, H - 36, Math.min(17, W * 0.04), '#ffb0b0');
+        if ((p.deadT || 0) > 2.4) {
+          bigText(ctx, DEATH_LABEL[p.deadCause] || 'DEAD', W / 2, 92, Math.min(24, W * 0.055), '#ff5a5a');
+          bigText(ctx, '...STILL FLOATING TOWARD THE FALLS', W / 2, H - 36, Math.min(17, W * 0.04), '#ffb0b0');
+        }
       } else if (touch) {
         btn.label = ab.name;
         const list = [btn];
@@ -2127,7 +2140,7 @@ export class River {
         bigText(ctx, `SPACE: ${ab.name}${ready ? '' : ` (${p.cd.toFixed(1)})`}`, W / 2, H - 30, 18, ready ? '#ffd23b' : '#aaa');
         if (this.modeT < 6) bigText(ctx, '◀ ▶ STEER    ▲ FASTER    ▼ SLOWER', W / 2, H - 58, 16, '#fff');
       }
-      if (touch && this.modeT < 5) bigText(ctx, 'DRAG LEFT SIDE TO PADDLE', W * 0.3, H - 40, 15, '#fff');
+      if (touch && this.modeT < 5 && !p.dead) bigText(ctx, 'DRAG LEFT SIDE TO PADDLE', W * 0.3, H - 40, 15, '#fff');
     } else {
       this.g.input.setButtons([]);
     }
