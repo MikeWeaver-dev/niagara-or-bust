@@ -579,6 +579,82 @@ class AudioEngine {
   thud() {
     this.tone({ type: 'sine', f: 120, f2: 45, dur: 0.18, gain: 0.35 });
   }
+
+  // ---------- the band's instruments ----------
+  // kind: keyboard | guitar | trumpet | bass | drums | mic ; style: 'note' (one note), 'riff' (a lick), 'hit' (bonk a rock)
+  instrument(kind, style = 'note') {
+    if (!this.ctx) return;
+    const t = this.now + 0.01;
+    const PENTA = [0, 2, 4, 7, 9, 12, 14, 16];
+    const pick = () => PENTA[Math.floor(Math.random() * PENTA.length)];
+    const hz = (base, semi) => base * Math.pow(2, semi / 12);
+    const sour = style === 'hit';
+    switch (kind) {
+      case 'keyboard': {
+        const seq = style === 'riff' ? [0, 4, 7, 12, 16, 12, 7, 19] : sour ? [0, 1, 6] : [pick()];
+        seq.forEach((s, i) => this.tone({ type: 'square', f: hz(523.25, s), t: t + (sour ? 0 : i * 0.07), dur: style === 'riff' ? 0.09 : 0.16, gain: 0.05, filter: { f: 2600 } }));
+        break;
+      }
+      case 'guitar': {
+        const chord = sour ? [0, 1, 6] : [0, 7, 12];
+        const root = style === 'note' ? hz(164.8, pick()) : 164.8;
+        const dur = style === 'riff' ? 0.7 : 0.35;
+        const c = this.ctx;
+        const shaper = c.createWaveShaper();
+        shaper.curve = this.distCurve;
+        const g = c.createGain();
+        g.gain.value = 0.5;
+        shaper.connect(g).connect(this.sfx);
+        (style === 'note' ? [0] : chord).forEach((s) => this.tone({ type: 'sawtooth', f: hz(root, s), t, dur, gain: 0.07, filter: { f: 1800, f2: 700 }, dest: shaper }));
+        if (style === 'riff') [0, 7, 12].forEach((s) => this.tone({ type: 'sawtooth', f: hz(root * 1.335, s), t: t + 0.32, dur: 0.5, gain: 0.06, filter: { f: 1800, f2: 600 }, dest: shaper }));
+        break;
+      }
+      case 'trumpet': {
+        const seq = style === 'riff' ? [[0, 0.1], [5, 0.1], [9, 0.1], [12, 0.5]] : sour ? [[-1, 0.3]] : [[pick(), 0.22]];
+        let at = t;
+        seq.forEach(([s, d]) => {
+          const f = hz(392, s);
+          this.tone({ type: 'sawtooth', f, t: at, dur: d, gain: 0.08, attack: 0.02, filter: { f: 900, f2: 2600 }, vib: d > 0.3 ? 6 : 0, vibRate: 6 });
+          this.tone({ type: 'square', f: f / 2, t: at, dur: d, gain: 0.025, filter: { f: 1200 } });
+          at += d + 0.02;
+        });
+        break;
+      }
+      case 'bass': {
+        const f = style === 'note' ? hz(55, pick() % 12) : 55;
+        this.tone({ type: 'sawtooth', f, t, dur: style === 'riff' ? 0.8 : 0.4, gain: 0.16, filter: { f: style === 'riff' ? 200 : 500, f2: style === 'riff' ? 1400 : 160, q: 6 } });
+        this.tone({ type: 'sine', f, t, dur: style === 'riff' ? 0.8 : 0.4, gain: 0.2 });
+        if (sour) this.tone({ type: 'sawtooth', f: f * 1.06, t, dur: 0.4, gain: 0.08, filter: { f: 400 } });
+        break;
+      }
+      case 'drums': {
+        const kick = (at) => this.tone({ type: 'sine', f: 150, f2: 42, t: at, dur: 0.16, gain: 0.32 });
+        const snare = (at) => this.noise({ t: at, dur: 0.12, type: 'bandpass', f: 1900, q: 0.8, gain: 0.25 });
+        const hat = (at) => this.noise({ t: at, dur: 0.04, type: 'highpass', f: 7000, gain: 0.12 });
+        if (style === 'riff') {
+          [0, 1, 2, 3, 4, 5, 6, 7].forEach((i) => snare(t + i * 0.055));
+          kick(t + 0.46);
+          this.noise({ t: t + 0.46, dur: 0.8, type: 'highpass', f: 5000, gain: 0.16 });
+        } else if (sour) {
+          kick(t);
+          this.noise({ t, dur: 0.5, type: 'highpass', f: 4000, gain: 0.18 });
+        } else {
+          const r = Math.random();
+          if (r < 0.4) kick(t);
+          else if (r < 0.75) snare(t);
+          else hat(t);
+        }
+        break;
+      }
+      case 'mic': {
+        const seq = style === 'riff' ? [0, 4, 7, 12] : sour ? [6] : [pick()];
+        seq.forEach((s, i) => this.voice({ t: t + i * 0.16, f: hz(392, s), dur: style === 'riff' ? 0.18 : 0.3, gain: 0.12, formants: [750, 1150], vib: 7, vibRate: 6 }));
+        break;
+      }
+      default:
+        break;
+    }
+  }
 }
 
 function makeDistortion(k) {

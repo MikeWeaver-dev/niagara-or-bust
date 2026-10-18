@@ -1,6 +1,8 @@
 import ItemPreview from './ItemPreview.jsx';
 import { Pips } from './common.jsx';
 import { useSave, priceOf, isOwned, lockReason, buy, select } from '../store.js';
+import { getCharacter } from '../data/characters.js';
+import { FAV_BONUS } from '../data/crafts.js';
 import { audio } from '../audio/audio.js';
 
 // A character or vessel card with preview, stats, and buy / select buttons.
@@ -36,6 +38,9 @@ export default function ItemCard({ kind, item, compact = false, onToast, onPick 
   };
 
   const chance = kind === 'craft' ? Math.round(item.base * 100) : null;
+  // band instruments: whose favorite it is, and whether the current character gets the boost
+  const fan = kind === 'craft' && item.fan ? getCharacter(item.fan) : null;
+  const favNow = fan && save.selected.character === item.fan;
   return (
     <div className={`card ${selected ? 'selected' : ''} ${!owned ? 'locked' : ''}`} onClick={compact ? () => (usable ? doSelect() : null) : undefined} role={compact ? 'button' : undefined}>
       <ItemPreview kind={kind} id={item.id} characterId={save.selected.character} active={!compact || selected} />
@@ -49,6 +54,11 @@ export default function ItemCard({ kind, item, compact = false, onToast, onPick 
             <span>BASE SURVIVAL</span>
             <b style={{ color: chance >= 100 ? '#d4a000' : chance >= 35 ? '#22a35e' : chance >= 22 ? '#c98a00' : '#d83a3a' }}>{chance}%</b>
           </div>
+          {fan && (
+            <div className={`fav-line ${favNow ? 'on' : ''}`}>
+              ⭐ {favNow ? `${fan.name.toUpperCase()}'S FAVORITE! +${Math.round(FAV_BONUS * 100)}%` : `${fan.name}'s favorite: +${Math.round(FAV_BONUS * 100)}%`}
+            </div>
+          )}
           {!compact && (
             <>
               <div className="stats">

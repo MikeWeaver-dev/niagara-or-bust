@@ -5,13 +5,14 @@ import ItemCard from './ItemCard.jsx';
 import ItemPreview from './ItemPreview.jsx';
 import { TopBar, useToast, toggleFullscreen, canFullscreen } from './common.jsx';
 import { CHARACTERS, getCharacter } from '../data/characters.js';
-import { CRAFTS, getCraft } from '../data/crafts.js';
+import { CRAFTS, getCraft, isFavorite } from '../data/crafts.js';
 import { CHEATS } from '../data/cheats.js';
 import { store, useSave, isOwned, lumenMultiplier, recordRun, priceOf, lockReason, setSetting } from '../store.js';
 import { deathMessage, surviveMessage } from '../data/messages.js';
 import { Game } from '../game/Game.js';
 import { audio } from '../audio/audio.js';
 import { music } from '../audio/music.js';
+import { clips } from '../audio/clips.js';
 
 export default function Play() {
   const location = useLocation();
@@ -97,7 +98,7 @@ function Loadout({ onStart }) {
       <div className="go-bar">
         <div className="summary">
           <div className="who">{ch.name}</div>
-          <div className="what">{save.cheats.salmon ? 'as a SALMON' : `in: ${cr.name}`}</div>
+          <div className="what">{save.cheats.salmon ? 'as a SALMON' : `in: ${cr.name}`}{!save.cheats.salmon && isFavorite(cr, ch) && <span className="fav-chip">⭐ +15%</span>}</div>
         </div>
         {!save.cheats.salmon && (
           <button className={`hard-chip ${save.settings.hard ? 'on' : ''}`} onClick={() => { audio.click(); setSetting('hard', !save.settings.hard); }} title="Tourists can shoot you before the falls">
@@ -132,6 +133,7 @@ function GameView({ onLoadout, onAgain }) {
   }, []);
 
   useEffect(() => {
+    clips.prepare();
     const s = store.get();
     const cfg = {
       character: getCharacter(s.selected.character),
@@ -149,7 +151,7 @@ function GameView({ onLoadout, onAgain }) {
         const mult = lumenMultiplier(st);
         const lumens = Math.max(1, Math.round(r.lumensBase * mult));
         const [headline, sub] = r.survived
-          ? surviveMessage({ character: cfg.character.id, craft: r.wrecked ? 'nothing' : cfg.craft.id })
+          ? surviveMessage({ character: cfg.character.id, craft: r.wrecked ? 'nothing' : cfg.craft.id, favorite: !r.wrecked && isFavorite(cfg.craft, cfg.character) })
           : deathMessage({ cause: r.cause, character: cfg.character.id, craft: r.salmon ? 'salmon' : cfg.craft.id, wrecked: r.wrecked, poop: r.poop });
         recordRun({ ...r, lumens });
         // what can we afford now?

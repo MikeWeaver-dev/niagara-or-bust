@@ -77,7 +77,38 @@ export const DEATH = {
     surfboard: [['WIPEOUT', 'Total, catastrophic, biological wipeout.']],
     lifejacket: [['THE LIFE JACKET FLOATED', 'Just the life jacket.']],
     nothing: [['NOTHING HELPED', 'Mostly because you brought nothing.']],
+    keyboard: [['KEYBOARD SMASHED', '88 keys. 0 survivors.'], ['CTRL+ALT+DEFEATED', 'Have you tried turning it off and on again?']],
+    guitar: [['BROKE A STRING', 'And every bone. Mostly the bones.'], ['FINAL SOLO', 'It was shredding. So were you.']],
+    trumpet: [['BLEW IT', 'Literally. Blew it right into the rocks.'], ['TAPS', 'The trumpet played you out.']],
+    bass: [['DROPPED THE BASS', 'Then the bass dropped you.'], ['NOBODY HEARD THE BASS', 'Classic. Nobody ever hears the bass.']],
+    drums: [['BA-DUM-TSSS', 'The punchline was you.'], ['DRUM SOLO OF DOOM', 'Every crash cymbal was a bone.']],
+    mic: [['MIC DROPPED. YOU DROPPED.', 'Nobody clapped.'], ['FEEDBACK', 'The worst feedback a singer has ever received.']],
   },
+  ryan: [
+    ['SOUL MUSTACHE: UNSAVED', "Peter's soul mustache will never know how this ended."],
+    ['PLAYED WITH EYES CLOSED', 'Opened them for the last 188 feet. Bad timing.'],
+  ],
+  bt: [
+    ['COMPUTAHHHH SAYS NO', 'BT asked the computer for a plan. It did not have one.'],
+    ['BLUE SCREEN OF DEATH', 'COMPUTAHHHH has stopped responding.'],
+  ],
+  mike: [
+    ['SECRET TAKEN TO THE GRAVE', 'Mike was secretly Chinese. Now Mike is secretly mist.'],
+    ['THE BEANIE SURVIVED', 'The beanie stayed on the whole time. Respect.'],
+  ],
+  amy: [
+    ['SMOKED TOO TOUGH', 'And was killed. Exactly as foretold.'],
+    ['WILL BE KILLED: CONFIRMED', 'It was right there in the bio.'],
+    ['LAST CIGARETTE', 'Still lit, somehow.'],
+  ],
+  max: [
+    ['TOO STINKY FOR NIAGARA', 'Even the falls tried to get away.'],
+    ['THE FISH FILED A COMPLAINT', 'It was upheld. Max has been removed from the river.'],
+  ],
+  andy: [
+    ['FRANKY WILL HEAR ABOUT THIS', 'Some day. When Franky is much, much older.'],
+    ['DAD JOKE', 'Fathered a son named Franky. Went over a waterfall. Classic dad.'],
+  ],
   timmy: [
     ['BONKED', 'Timmy saw stars. Then the angels. Then his mom (very mad).'],
     ['TIMMY IS A GHOST NOW', 'He is still holding the juice box.'],
@@ -139,9 +170,15 @@ export const LAST_WORDS = {
   jean: ['Sacré bleu!', 'Mon dieu!', 'Oh la la!', 'Zut alors!'],
   kacey: ['Giraffes can\'t swim!', 'My beautiful neck!', 'Rainbow powers, fail!', 'Pet me later!'],
   gary: ['Why am I here?!', 'Gary out!', 'I just came for the boat tour!'],
+  ryan: ['Peter! The mustache!', 'Tell Peter I loved his soul mustache!', 'My chops!'],
+  bt: ['Computahhhh!', 'Computer, save me!', 'Control Z! Control Z!'],
+  mike: ['My beanie!', 'Keep my secret!', 'Not the guitar!'],
+  amy: ['I knew I would be killed!', 'Hold my cigarette!', 'One more song!'],
+  max: ['Do I smell?', 'I was gonna shower after!', 'Low end forever!'],
+  andy: ['Tell Franky I love him!', 'Franky, look away!', 'Ba dum tss!'],
   poop: ['Oh no. Oh no no no.', 'That is not blood!', 'Excuse me!', 'Too many hot dogs!'],
 };
-export const VOICE_PITCH = { annie: 1.35, timmy: 1.95, bobby: 0.55, jean: 0.95, kacey: 1.7, gary: 0.75 };
+export const VOICE_PITCH = { annie: 1.35, timmy: 1.95, bobby: 0.55, jean: 0.95, kacey: 1.7, gary: 0.75, ryan: 1.0, bt: 0.85, mike: 1.0, amy: 1.35, max: 0.75, andy: 0.9 };
 export function lastWords(character, poop = false) {
   const pool = poop ? LAST_WORDS.poop : Math.random() < 0.55 && LAST_WORDS[character] ? LAST_WORDS[character] : LAST_WORDS.generic;
   return pick(pool);
@@ -169,6 +206,17 @@ export const SURVIVE_BY = {
   kacey: [['RAINBOW RIDER!', 'Kacey survived and is now on 40 postcards.']],
   jean: [['MAGNIFIQUE!', 'Jean is already selling souvenir pieces of your raft.']],
   canoe: [['YOU AND GARY LIVED!', 'Gary would like to be dropped off now.']],
+  ryan: [['SOUL MUSTACHE SAVED!', "Peter's soul mustache would be proud."]],
+  bt: [['COMPUTAHHHH SAYS YES!', 'BT ran the numbers. The numbers said lol.']],
+  mike: [['SURVIVED!', 'And the beanie did not even come off.']],
+  amy: [['NOT KILLED (YET)!', 'Smoked too tough, survived anyway. Lighting a celebratory one.']],
+  max: [['SURVIVED!', 'Did not get any less stinky though.']],
+  andy: [['DAD SURVIVED!', 'Franky still has a dad. For now.']],
+  favorite: [
+    ['ENCORE!', 'Rode their favorite instrument all the way down. Kids Table forever!'],
+    ['GREATEST GIG EVER', 'Played the Horseshoe Falls and lived. The crowd lost it.'],
+    ['ROCK AND ROLL!', 'The instrument knew the way. It always does.'],
+  ],
 };
 
 export const DIARRHEA = [
@@ -187,13 +235,15 @@ export function deathMessage({ cause, character, craft, wrecked, poop }) {
   const roll = Math.random();
   if (character === 'kacey' && roll < 0.4) return pick(DEATH.kacey);
   if (character === 'bobby' && roll < 0.2) return pick(DEATH.bobby);
+  if (['ryan', 'bt', 'mike', 'amy', 'max', 'andy'].includes(character) && roll < 0.35) return pick(DEATH[character]);
   if (!wrecked && DEATH.vessel[craft] && roll > 0.78) return pick(DEATH.vessel[craft]);
   if (DEATH[cause] && Math.random() < 0.7) return pick(DEATH[cause]);
   return pick(DEATH.generic);
 }
 
-export function surviveMessage({ character, craft }) {
+export function surviveMessage({ character, craft, favorite = false }) {
   if (craft === 'goose') return pick(SURVIVE_BY.goose);
+  if (favorite && Math.random() < 0.6) return pick(SURVIVE_BY.favorite);
   if (craft === 'canoe' && Math.random() < 0.5) return pick(SURVIVE_BY.canoe);
   if (SURVIVE_BY[character] && Math.random() < 0.45) return pick(SURVIVE_BY[character]);
   return pick(SURVIVE);

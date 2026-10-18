@@ -2,6 +2,7 @@
 // top-down view (scaled by S/100), metres for the side view (caller sets transform).
 import { TAU, shade } from './util.js';
 import { OUTLINE } from './charArt.js';
+import { drawInstrument, drawInstrumentAlong, drawMic } from './instrumentArt.js';
 
 const ol = (ctx, lw) => {
   ctx.strokeStyle = OUTLINE;
@@ -35,6 +36,83 @@ export function drawCraftTop(ctx, craftId, S, opts = {}) {
     case 'salmon': {
       ripple(ctx, 0, 0, 55, t, lw);
       seat(occupant, 0, bob);
+      break;
+    }
+    // ---- the band's instruments (front end points up the river)
+    case 'keyboard': {
+      ripple(ctx, 0, 12, 105, t, lw);
+      ctx.save();
+      ctx.translate(0, 12 + bob * 0.5);
+      ctx.rotate(Math.sin(t * 2) * 0.03);
+      drawInstrument(ctx, 'keyboard', 190);
+      cracks(ctx, damage, 80, 18, lw);
+      ctx.restore();
+      if (active) shine(ctx, t, 90);
+      seat(occupant, 0, 14 + bob);
+      break;
+    }
+    case 'guitar':
+    case 'bass': {
+      const len = craftId === 'bass' ? 220 : 195;
+      ripple(ctx, 0, 12, len * 0.42, t, lw);
+      ctx.save();
+      ctx.translate(0, bob * 0.5);
+      ctx.rotate(-Math.PI / 2 + Math.sin(t * 1.7) * 0.03);
+      drawInstrumentAlong(ctx, craftId, len);
+      ctx.restore();
+      cracks(ctx, damage, 30, 60, lw);
+      seat(occupant, 0, len * 0.24 + bob);
+      break;
+    }
+    case 'trumpet': {
+      ripple(ctx, 0, 10, 82, t, lw);
+      if (active) {
+        // sound waves blasting out of the bell
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,240,170,0.8)';
+        ctx.lineWidth = lw * 1.4;
+        for (let k = 0; k < 3; k++) {
+          const u = (t * 2.5 + k / 3) % 1;
+          ctx.globalAlpha = 1 - u;
+          ctx.beginPath();
+          ctx.arc(0, 95 + u * 70, 25 + u * 45, Math.PI * 0.15, Math.PI * 0.85);
+          ctx.stroke();
+        }
+        ctx.restore();
+        ol(ctx, lw);
+      }
+      ctx.save();
+      ctx.translate(0, bob * 0.5);
+      ctx.rotate(-Math.PI / 2 + Math.sin(t * 2.1) * 0.03);
+      drawInstrumentAlong(ctx, 'trumpet', 190);
+      ctx.restore();
+      cracks(ctx, damage, 25, 70, lw);
+      seat(occupant, 0, -2 + bob);
+      break;
+    }
+    case 'drums': {
+      ripple(ctx, 0, 32, 98, t, lw);
+      // the drummer sits behind the kit
+      if (!active) seat(occupant, 0, -14 + bob);
+      ctx.save();
+      ctx.translate(0, 26 + bob * 0.4);
+      ctx.rotate(Math.sin(t * 1.5) * 0.02);
+      drawInstrument(ctx, 'drums', 172);
+      cracks(ctx, damage, 60, 50, lw);
+      ctx.restore();
+      if (active) shine(ctx, t, 90);
+      break;
+    }
+    case 'mic': {
+      // straddling the back of the handle so the grille stays in view
+      ripple(ctx, 0, 20, 82, t, lw);
+      ctx.save();
+      ctx.translate(0, bob * 0.5);
+      ctx.rotate(-Math.PI / 2 + Math.sin(t * 1.9) * 0.03);
+      drawMic(ctx, 200, lw, t);
+      ctx.restore();
+      cracks(ctx, damage, 20, 60, lw);
+      seat(occupant, 0, 62 + bob);
       break;
     }
     case 'surfboard': {
@@ -625,6 +703,25 @@ export function drawCraftSide(ctx, craftId, lw, opts = {}) {
       drawGooseSide(ctx, lw, t, flap);
       break;
     }
+    case 'keyboard': {
+      ctx.save();
+      ctx.translate(0, -0.06);
+      ctx.scale(1, 0.72);
+      drawInstrument(ctx, 'keyboard', 1.95);
+      ctx.restore();
+      break;
+    }
+    case 'guitar':
+    case 'bass':
+    case 'trumpet':
+      drawInstrumentAlong(ctx, craftId, { guitar: 2.05, bass: 2.35, trumpet: 1.95 }[craftId]);
+      break;
+    case 'drums':
+      drawInstrument(ctx, 'drums', 1.32);
+      break;
+    case 'mic':
+      drawMic(ctx, 1.75, lw, t);
+      break;
     default:
       break;
   }

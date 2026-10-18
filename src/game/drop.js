@@ -8,14 +8,19 @@ import { buildHuman, buildGiraffe, breakBone, drawRagdoll, corePoint, poseRagdol
 import { drawCraftSide, drawParachute, drawGooseSide } from './vesselArt.js';
 import { drawHead, drawUpright, drawBear, GARY, OUTLINE, BORDER_AGENT } from './charArt.js';
 import { lastWords, VOICE_PITCH } from '../data/messages.js';
+import { clips } from '../audio/clips.js';
 import * as art from './dropArt.js';
 import { POOL_Y, LIP_DEPTH, cliffX, rockContains } from './dropArt.js';
 import { clamp, lerp, rand, pick, approach, bigText, TAU, easeOutBack, roundRect } from './util.js';
 import { computeOdds, oddsColor, LANE_NAME } from './odds.js';
 import { drawButton, drawJoystick, pill, bar } from './hud.js';
 import { RAINBOW } from '../data/characters.js';
+import { isFavorite } from '../data/crafts.js';
 
-const RING_LABEL = { pencil: 'POINT YOUR TOES!', boof: 'BOOF!' };
+const RING_LABEL = { pencil: 'POINT YOUR TOES!', boof: 'BOOF!', micdrop: 'MIC DROP!' };
+// physics box (w, h) for the band's instruments; the rest keep their classic sizes
+const INST_BOX = { keyboard: [1.9, 0.14], guitar: [2.0, 0.32], trumpet: [1.9, 0.36], bass: [2.3, 0.36], drums: [1.05, 0.8], mic: [1.7, 0.2] };
+const INST_DEBRIS = { keyboard: '#d0202a', guitar: '#ff9a4a', trumpet: '#e8b84a', bass: '#3fd08e', drums: '#a8402e', mic: '#c8ccd4' };
 const MINI_MODES = ['inflate', 'mash', 'rhythm', 'aim'];
 const JOY_MODES = ['boof', 'surf', 'glide', 'aim'];
 const RING_BONUS = { perfect: 0.18, good: 0.09, ok: 0.03, miss: -0.05 };
@@ -34,6 +39,10 @@ export class Drop {
     this.cheats = cheats;
     this.settings = settings;
     this.craftId = info.wrecked ? 'nothing' : craft.id;
+    // instruments borrow a classic vessel's physics ("mech"); art still goes by craftId
+    this.mech = info.wrecked ? 'nothing' : craft.like || craft.id;
+    this.fav = !info.wrecked && isFavorite(craft, character);
+    this.dropText = (!info.wrecked && craft.dropText) || {};
     this.dropMode = info.wrecked ? 'pencil' : craft.drop;
     this.t = 0;
     this.stage = 'approach';
@@ -114,7 +123,8 @@ export class Drop {
 
   setupBodies() {
     const P = this.phys;
-    const id = this.craftId;
+    const id = this.mech;
+    const box = INST_BOX[this.craftId];
     const ch = this.ch;
     const x0 = -7;
     const giraffe = ch.kind === 'giraffe';
@@ -132,14 +142,14 @@ export class Drop {
         break;
       }
       case 'surfboard': {
-        this.body = makeBox(P, x0, 0, 2.0, 0.1, 3, { buoy: 2.4 });
+        this.body = makeBox(P, x0, 0, box ? box[0] : 2.0, box ? box[1] : 0.1, 3, { buoy: 2.4 });
         this.rider = this.makeRider(ch, x0, giraffe ? -0.8 : -0.05 - 0.74 * ch.scale, 'surf');
         if (giraffe) this.attachSticks = this.attachNearest(this.rider, this.body, ['blf', 'brf', 'flf', 'frf', 'hips', 'shoulders'], 0.8);
         else this.attachSticks = [...this.attachNearest(this.rider, this.body, ['footL', 'footR']), ...this.attachNearest(this.rider, this.body, ['pelvis', 'chest'], 0.12)];
         break;
       }
       case 'barrel': {
-        this.body = makeBox(P, x0, -0.05, 0.95, 0.62, 6, { buoy: 2.2 });
+        this.body = makeBox(P, x0, -0.05, box ? box[0] : 0.95, box ? box[1] : 0.62, 6, { buoy: 2.2 });
         this.rider = this.makeRider(ch, x0 - 0.1, giraffe ? 0.1 : 0.05, 'crouch');
         // the rider rides inside, invisible and frozen, until the barrel breaks
         this.rider.pts.forEach((p) => {
@@ -150,10 +160,10 @@ export class Drop {
         break;
       }
       case 'kayak': {
-        this.body = makeBox(P, x0, 0, 2.8, 0.3, 4, { buoy: 2.0 });
-        this.rider = this.makeRider(ch, x0 - 0.15, giraffe ? -0.35 : -0.17, 'sit');
-        this.attachSticks = this.attachNearest(this.rider, this.body, giraffe ? ['hips', 'shoulders', 'blk', 'flk'] : ['pelvis', 'kneeL', 'kneeR', 'footL', 'footR']);
-        if (!giraffe) {
+        this.body = makeBox(P, x0, 0, box ? box[0] : 2.8, box ? box[1] : 0.3, 4, { buoy: 2.0 });
+        this.rider = this.makeRider(ch, x0 - (box ? 0.45 : 0.15), giraffe ? -0.35 : -0.17 - (box ? 0.04 : 0), 'sit');
+        this.attachSticks = this.attachNearest(this.rider, this.body, giraffe ? ['hips', 'shoulders', 'blk', 'flk'] : ['pelvis', 'kneeL', 'kneeR', 'footL', 'footR', ...(box ? ['handL', 'handR'] : [])]);
+        if (!giraffe && !box) {
           const hL = this.rider.P.handL;
           const hR = this.rider.P.handR;
           const pa = P.point(hL.x - 0.9, hL.y - 0.05, { mass: 0.3, r: 0.05 });
@@ -168,13 +178,13 @@ export class Drop {
         break;
       }
       case 'canoe': {
-        this.body = makeBox(P, x0, 0, 3.2, 0.45, 5, { buoy: 2.0 });
-        this.rider = this.makeRider(ch, x0 - 0.75, giraffe ? -0.4 : -0.2, 'sit');
-        this.gary = this.makeRider(GARY, x0 + 0.65, -0.2, 'sit');
-        this.attachSticks = [
-          ...this.attachNearest(this.rider, this.body, giraffe ? ['hips', 'shoulders', 'blk'] : ['pelvis', 'footL', 'footR']),
-          ...this.attachNearest(this.gary, this.body, ['pelvis', 'footL', 'footR']),
-        ];
+        this.body = makeBox(P, x0, 0, box ? box[0] : 3.2, box ? box[1] : 0.45, 5, { buoy: 2.0 });
+        this.rider = this.makeRider(ch, x0 - (box ? 0.5 : 0.75), giraffe ? -0.4 : -0.2, 'sit');
+        this.attachSticks = this.attachNearest(this.rider, this.body, giraffe ? ['hips', 'shoulders', 'blk'] : ['pelvis', 'footL', 'footR', ...(box ? ['handL', 'handR'] : [])]);
+        if (this.craft.passenger) {
+          this.gary = this.makeRider(GARY, x0 + 0.65, -0.2, 'sit');
+          this.attachSticks.push(...this.attachNearest(this.gary, this.body, ['pelvis', 'footL', 'footR']));
+        }
         break;
       }
       case 'hamster': {
@@ -205,9 +215,10 @@ export class Drop {
         P.constraints.push(this.containment);
         break;
       }
+      case 'mic':
       case 'jetski': {
-        this.body = makeBox(P, x0, 0, 2.1, 0.45, 6, { buoy: 2.0 });
-        this.rider = this.makeRider(ch, x0 - 0.35, giraffe ? -0.55 : -0.5, 'ride');
+        this.body = makeBox(P, x0, 0, box ? box[0] : 2.1, box ? box[1] : 0.45, 6, { buoy: 2.0 });
+        this.rider = this.makeRider(ch, x0 - 0.35, giraffe ? -0.55 : box ? -(box[1] / 2 + 0.3) : -0.5, 'ride');
         this.attachSticks = this.attachNearest(this.rider, this.body, giraffe ? ['hips', 'shoulders', 'flk', 'blk'] : ['pelvis', 'kneeL', 'kneeR', 'footL', 'footR', 'handL', 'handR']);
         break;
       }
@@ -343,7 +354,7 @@ export class Drop {
         if (Math.random() < 0.35) this.fx.cloud(p.x, POOL_Y + rand(0.2, 1.2), goreOf(p.style).cloud, 1.2);
         return false;
       }
-      if (p.kind === 'drop' || p.kind === 'confetti' || p.kind === 'spark') return false;
+      if (p.kind === 'drop' || p.kind === 'confetti' || p.kind === 'spark' || p.kind === 'note') return false;
       if (p.kind !== 'cloud' && p.kind !== 'bubble' && p.kind !== 'smoke' && p.kind !== 'fire' && p.kind !== 'foam' && p.kind !== 'mist' && p.kind !== 'stink') {
         // floating junk
         p.y = POOL_Y - 0.05;
@@ -379,6 +390,7 @@ export class Drop {
       speed: info.speed,
       bonus: this.bonus,
       cheats: this.cheats,
+      fav: this.fav,
     });
   }
 
@@ -486,9 +498,13 @@ export class Drop {
     const rag = this.rider;
     const style = this.goreStyle;
     const gore = this.cheats.goreGalore || this.forced === 'banana' ? 'galore' : this.settings.gore;
-    // famous last words (Chrome's built-in voice, pitched per character); a corpse already said theirs in the river
-    if (!this.info.dead) setTimeout(() => audio.say(lastWords(this.ch.id, this.poop), VOICE_PITCH[this.ch.id] || 1), 180);
-    if (this.gary) setTimeout(() => audio.say(lastWords('gary'), VOICE_PITCH.gary), 1700);
+    // death noise (a recorded clip; the synth voice only if no clip loaded). A corpse already made theirs in the river.
+    let said = 0;
+    if (!this.info.dead) {
+      said = clips.play('death', { delay: 0.15 });
+      if (!said) setTimeout(() => audio.say(lastWords(this.ch.id, this.poop), VOICE_PITCH[this.ch.id] || 1), 180);
+    }
+    if (this.gary) setTimeout(() => audio.say(lastWords('gary'), VOICE_PITCH.gary), Math.max(1700, (said + 0.3) * 1000));
     if (cause === 'impaled' && style !== 'cartoon') this.impale();
     if (cause === 'pancake' && style !== 'cartoon') this.pancake();
     rag.expr = 'ko';
@@ -955,9 +971,15 @@ export class Drop {
     if (!this.body || this.vesselBroken) return;
     if (id === 'goose') return;
     this.vesselBroken = true;
-    const col = { barrel: '#8a5a2b', kayak: '#ff4f2b', canoe: '#2e8b57', surfboard: '#ffe14d', jetski: '#e8203a' }[id] || '#888';
-    this.fx.debris(this.body.cx, this.body.cy, col, 18, id === 'barrel' ? 0.35 : 0.28);
-    if (id === 'barrel') {
+    const col = INST_DEBRIS[id] || { barrel: '#8a5a2b', kayak: '#ff4f2b', canoe: '#2e8b57', surfboard: '#ffe14d', jetski: '#e8203a' }[id] || '#888';
+    this.fx.debris(this.body.cx, this.body.cy, col, 18, id === 'barrel' || id === 'drums' ? 0.35 : 0.28);
+    if (this.craft.band) {
+      // instruments die musically
+      audio.instrument(id, 'hit');
+      audio.shatter();
+      this.fx.debris(this.body.cx, this.body.cy, id === 'drums' ? '#d8dde4' : '#1d1d24', 6, 0.2, 0, 'shard');
+      this.fx.notes(this.body.cx, this.body.cy, 6);
+    } else if (id === 'barrel') {
       audio.woodBreak();
       this.fx.debris(this.body.cx, this.body.cy, '#3d3d48', 4, 0.4);
     } else if (id === 'jetski') {
@@ -1036,6 +1058,7 @@ export class Drop {
     this.processBreaks(dt);
     this.updateEmitters(dt);
     this.updateStage(dt, inp);
+    this.updateFavNotes(dt);
     if (this.sinkT > 0) this.sinkT -= dt;
     if (this.bloodRain > 0) {
       this.bloodRain -= dt;
@@ -1051,6 +1074,17 @@ export class Drop {
   core() {
     if (this.hideRider && this.body) return { x: this.body.cx, y: this.body.cy };
     return corePoint(this.rider);
+  }
+
+  // a band member on their own instrument keeps playing all the way down
+  updateFavNotes(dt) {
+    if (!this.fav || this.vesselBroken || this.info.dead || this.info.ko || !this.body) return;
+    if (this.stage !== 'approach' && this.stage !== 'fall') return;
+    this.noteT = (this.noteT || 0) - dt;
+    if (this.noteT > 0) return;
+    this.noteT = rand(0.16, 0.3);
+    this.fx.notes(this.body.cx, this.body.cy - 0.4, 1);
+    if (Math.random() < 0.35) audio.instrument(this.craftId);
   }
 
   preStep(h, inp) {
@@ -1234,7 +1268,7 @@ export class Drop {
           const g = this.phys.gravity;
           const tNow = Math.sqrt((2 * Math.max(0, c.y)) / g);
           const tTarget = Math.sqrt((2 * (mode === 'boof' ? 38 : 30)) / g);
-          this.mini.ring = { t: 0, dur: clamp(tTarget - tNow, 0.55, 1.0), label: RING_LABEL[mode] };
+          this.mini.ring = { t: 0, dur: clamp(tTarget - tNow, 0.55, 1.0), label: this.dropText.ring || RING_LABEL[mode] };
           this.g.setTimeScale(0.45, 6);
         }
         const R = this.mini.ring;
@@ -1305,8 +1339,12 @@ export class Drop {
         if (this.gary) this.gary.hidden = true;
         if ((this.body || this.ball) && this.craftId !== 'goose') this.vesselFloat = { id: this.craftId, x: this.impact.x + 2.2 };
         audio.splash(0.6);
-        audio.yay(this.ch.voice || 1);
+        if (!clips.play('survive')) audio.yay(this.ch.voice || 1);
         audio.fanfare();
+        if (this.craft.band && !this.info.wrecked) {
+          audio.instrument(this.craftId, 'riff');
+          this.fx.notes(this.impact.x, POOL_Y - 1.5, this.fav ? 14 : 5);
+        }
         audio.cheer(3);
         this.fx.confetti(this.impact.x, POOL_Y - 2, 80);
         this.boatTarget = this.impact.x + 10;
@@ -1314,6 +1352,7 @@ export class Drop {
       if (O.survived && this.craftId === 'goose' && !this.flags.gooseCheer && this.stageT > 0.4) {
         this.flags.gooseCheer = true;
         audio.honk();
+        clips.play('survive', { delay: 0.5 });
         audio.fanfare();
         audio.cheer(3);
         this.fx.confetti(this.impact.x, POOL_Y - 2, 80);
@@ -1385,24 +1424,32 @@ export class Drop {
         this.g.setTimeScale(0.5, 6);
       }
       const I = M.inf;
+      const T = this.dropText;
+      const horn = this.craftId === 'trumpet';
       if (inp.isDown('primary')) {
         I.started = true;
         I.m += dt * 0.62;
-        if (Math.random() < 0.35) audio.tone({ type: 'sine', f: 260 + I.m * 520, dur: 0.05, gain: 0.05 });
+        if (horn) {
+          if (Math.random() < 0.18) audio.tone({ type: 'sawtooth', f: 330 + I.m * 660, dur: 0.12, gain: 0.05, filter: { f: 1400 + I.m * 1600 } });
+          if (Math.random() < 0.25) this.fx.notes(this.body ? this.body.cx - 0.9 : c.x, this.body ? this.body.cy : c.y, 1);
+        } else if (Math.random() < 0.35) audio.tone({ type: 'sine', f: 260 + I.m * 520, dur: 0.05, gain: 0.05 });
       }
-      this.rider.opts.inflate = I.m;
+      if (!horn) this.rider.opts.inflate = I.m;
       if (I.m > 1.0) {
-        audio.pop();
-        this.fx.debris(c.x, c.y, '#ff7a1a', 10, 0.15, 0, 'shard');
-        this.rider.opts.inflate = 0;
-        this.rider.opts.lifejacket = false;
-        this.finishMini(-0.08, 'POPPED IT!', 0);
+        if (horn) audio.instrument('trumpet', 'hit');
+        else {
+          audio.pop();
+          this.fx.debris(c.x, c.y, '#ff7a1a', 10, 0.15, 0, 'shard');
+          this.rider.opts.inflate = 0;
+          this.rider.opts.lifejacket = false;
+        }
+        this.finishMini(-0.08, T.pop || 'POPPED IT!', 0);
       } else if (I.started && (!inp.isDown('primary') || c.y > DECIDE_Y - 2)) {
         audio.whoosh(0.3);
-        if (I.m >= 0.65 && I.m <= 0.9) this.finishMini(0.18, 'PERFECTLY PUFFED!', 5);
-        else if (I.m >= 0.45) this.finishMini(0.09, 'PUFFY ENOUGH', 3);
-        else this.finishMini(0.02, 'BARELY INFLATED', 1);
-      } else if (c.y > DECIDE_Y - 2) this.finishMini(-0.05, 'FORGOT TO INFLATE', 0);
+        if (I.m >= 0.65 && I.m <= 0.9) this.finishMini(0.18, T.perfect || 'PERFECTLY PUFFED!', 5);
+        else if (I.m >= 0.45) this.finishMini(0.09, T.good || 'PUFFY ENOUGH', 3);
+        else this.finishMini(0.02, T.weak || 'BARELY INFLATED', 1);
+      } else if (c.y > DECIDE_Y - 2) this.finishMini(-0.05, T.none || 'FORGOT TO INFLATE', 0);
     } else if (mode === 'mash') {
       // Barrel: mash to stuff it full of pillows before impact
       if (!M.mash) {
@@ -1411,15 +1458,23 @@ export class Drop {
         this.g.setTimeScale(0.5, 6);
       }
       const B = M.mash;
+      const T = this.dropText;
+      const kit = this.craftId === 'drums';
       B.t += dt;
       if (inp.pressed('primary')) {
         B.n++;
-        audio.squish();
-        this.fx.feathers(c.x, c.y, 3, ['#ffffff', '#f2f2f8', '#e8e8f0'], 0.45);
-        if (B.n % 4 === 0) this.fx.text(['FLUFF!', 'PILLOW!', 'CUSHION!', 'DUVET!'][(B.n / 4) % 4], c.x + rand(-1, 1), c.y - 1, '#fff', 18, 0, 0.7);
+        if (kit) {
+          audio.instrument('drums');
+          this.fx.notes(c.x, c.y, 1);
+        } else {
+          audio.squish();
+          this.fx.feathers(c.x, c.y, 3, ['#ffffff', '#f2f2f8', '#e8e8f0'], 0.45);
+        }
+        if (B.n % 4 === 0) this.fx.text((T.words || ['FLUFF!', 'PILLOW!', 'CUSHION!', 'DUVET!'])[(B.n / 4) % 4], c.x + rand(-1, 1), c.y - 1, '#fff', 18, 0, 0.7);
       }
       if (B.t >= B.dur || c.y > DECIDE_Y - 2) {
-        this.finishMini(Math.min(0.2, B.n * 0.0125), B.n >= 16 ? 'FULLY PADDED!' : B.n >= 8 ? 'SOME PILLOWS' : 'ONE SAD PILLOW', Math.min(5, Math.floor(B.n / 3)));
+        if (kit && B.n >= 8) audio.instrument('drums', 'riff');
+        this.finishMini(Math.min(0.2, B.n * 0.0125), B.n >= 16 ? T.perfect || 'FULLY PADDED!' : B.n >= 8 ? T.good || 'SOME PILLOWS' : T.weak || 'ONE SAD PILLOW', Math.min(5, Math.floor(B.n / 3)));
       }
     } else if (mode === 'rhythm') {
       // Canoe: air-paddle left / right in time with Gary
@@ -1439,8 +1494,13 @@ export class Drop {
           if (dir === b.dir && Math.abs(R.t - b.at) < 0.22) {
             b.res = 'hit';
             R.hits++;
-            audio.paddle();
-            this.fx.splash(c.x + (dir === 'left' ? -1.2 : 1.2), c.y, 0.25);
+            if (this.craftId === 'bass') {
+              audio.instrument('bass');
+              this.fx.notes(c.x + (dir === 'left' ? -0.8 : 0.8), c.y, 2);
+            } else {
+              audio.paddle();
+              this.fx.splash(c.x + (dir === 'left' ? -1.2 : 1.2), c.y, 0.25);
+            }
           } else {
             b.res = 'miss';
             audio.denied();
@@ -1454,7 +1514,8 @@ export class Drop {
       }
       if (R.i >= R.beats.length || c.y > DECIDE_Y - 2) {
         const frac = R.hits / R.beats.length;
-        this.finishMini(frac * 0.2 - (frac < 0.3 ? 0.05 : 0), frac > 0.8 ? 'IN SYNC WITH GARY!' : frac > 0.4 ? 'GARY IS CONFUSED' : 'TOTAL CHAOS', Math.round(frac * 5));
+        const T = this.dropText;
+        this.finishMini(frac * 0.2 - (frac < 0.3 ? 0.05 : 0), frac > 0.8 ? T.perfect || 'IN SYNC WITH GARY!' : frac > 0.4 ? T.good || 'GARY IS CONFUSED' : T.weak || 'TOTAL CHAOS', Math.round(frac * 5));
       }
     } else if (mode === 'aim') {
       // Hamster ball: roll your landing into the deep-water zone
@@ -1497,6 +1558,13 @@ export class Drop {
     this.addBonus(RING_BONUS[res], labels[res], lum);
     if (res === 'perfect' || res === 'good') {
       audio.pickup(res === 'perfect' ? 1.5 : 1.2);
+      if (this.dropMode === 'micdrop') {
+        this.attachSticks.forEach((s) => (s.broken = true));
+        audio.instrument('mic', 'riff');
+        const c = this.core();
+        this.fx.text('*MIC DROP*', c.x, c.y - 1.6, '#ffd23b', 30, 0, 1.6);
+        if (this.body) this.fx.notes(this.body.cx, this.body.cy, 6);
+      }
       this.applyPose();
       if (this.dropMode === 'boof') audio.slideUp();
     } else audio.denied();
@@ -1516,7 +1584,7 @@ export class Drop {
     const s = R.s;
     const mode = this.dropMode;
     const ph = this.phys;
-    if (mode === 'pencil') {
+    if (mode === 'pencil' || mode === 'micdrop') {
       ph.stick(P.footL, P.footR, { len: 0.12 * s, stiff: 0.5, kind: 'pose' });
       ph.stick(P.footL, P.head, { len: 1.5 * s, stiff: 0.3, kind: 'pose' });
       ph.stick(P.handL, P.pelvis, { len: 0.2 * s, stiff: 0.4, kind: 'pose' });
@@ -1586,6 +1654,7 @@ export class Drop {
     if (O.survived) breakdown.push(['SURVIVAL BONUS', 10 + 4 * this.craft.tier]);
     if (gore) breakdown.push(['Gore bonus', gore]);
     if (this.flags.cave) breakdown.push(['SECRET CAVE BONUS', 25]);
+    if (this.fav) breakdown.push(['Played your favorite instrument', 5]);
     const total = breakdown.reduce((a, [, n]) => a + n, 0);
     this.g.finish({
       survived: O.survived,
@@ -1746,7 +1815,7 @@ export class Drop {
       ctx.translate(this.body.cx, this.body.cy);
       ctx.rotate(this.body.angle);
       drawCraftSide(ctx, id, lw, { t, flap: this.stage === 'fall' && id === 'goose' && this.gooseFlap ? 1 : 0 });
-      if (id === 'barrel' && this.hideRider) {
+      if (this.mech === 'barrel' && this.hideRider) {
         // porthole with the rider's terrified face
         ctx.fillStyle = '#bfe9ff';
         ctx.strokeStyle = '#3d3d48';
@@ -1769,7 +1838,7 @@ export class Drop {
       }
       ctx.restore();
     };
-    const behind = id === 'kayak' || id === 'canoe' || id === 'jetski' || id === 'goose';
+    const behind = ['kayak', 'canoe', 'jetski', 'goose', 'mic'].includes(this.mech);
     if (!behind) drawVessel();
     if (this.gary) drawRagdoll(ctx, this.gary, lw, t);
     if (!this.hideRider) drawRagdoll(ctx, this.rider, lw, t);
@@ -1869,7 +1938,7 @@ export class Drop {
     const btns = [];
     if (mode === 'inflate') {
       const m = M.inf ? M.inf.m : 0;
-      bigText(ctx, 'INFLATE THE VEST!', W / 2, H * 0.2, head, '#ff9a3b');
+      bigText(ctx, this.dropText.title || 'INFLATE THE VEST!', W / 2, H * 0.2, head, '#ff9a3b');
       bigText(ctx, touch ? 'HOLD THE BUTTON, LET GO IN THE GREEN' : 'HOLD SPACE, LET GO IN THE GREEN', W / 2, H * 0.2 + 30, sub, '#fff');
       const gh = Math.min(180, H * 0.4);
       const gx = touch ? W - btnR * 2 - 52 : W - 70;
@@ -1884,19 +1953,19 @@ export class Drop {
       ctx.fillRect(gx - 10, y(1.0), 20, y(0.95) - y(1.0) + 2);
       ctx.fillStyle = '#ff7a1a';
       ctx.fillRect(gx - 6, y(Math.min(1, m)), 12, y(0) - y(Math.min(1, m)));
-      bigText(ctx, 'PSI', gx, gy0 - 16, 13);
-      if (touch) btns.push({ id: 'inflate', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'INFLATE', action: 'primary' });
+      bigText(ctx, this.dropText.unit || 'PSI', gx, gy0 - 16, 13);
+      if (touch) btns.push({ id: 'inflate', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: this.dropText.btn || 'INFLATE', action: 'primary' });
     } else if (mode === 'mash') {
       const B = M.mash || { n: 0, t: 0, dur: 1.5 };
-      bigText(ctx, 'PAD THE BARREL! MASH!', W / 2, H * 0.2, head, '#ffd23b');
+      bigText(ctx, this.dropText.title || 'PAD THE BARREL! MASH!', W / 2, H * 0.2, head, '#ffd23b');
       bigText(ctx, touch ? 'TAP TAP TAP TAP TAP' : 'MASH SPACE AS FAST AS YOU CAN', W / 2, H * 0.2 + 30, sub, '#fff');
       const bw = Math.min(W * 0.6, 320);
-      bar(ctx, W / 2 - bw / 2, H * 0.74, bw, 22, Math.min(1, B.n / 16), '#ffd23b', `PILLOWS: ${B.n}`);
+      bar(ctx, W / 2 - bw / 2, H * 0.74, bw, 22, Math.min(1, B.n / 16), '#ffd23b', `${this.dropText.unit || 'PILLOWS'}: ${B.n}`);
       bar(ctx, W / 2 - bw / 2, H * 0.74 + 30, bw, 10, 1 - B.t / B.dur, '#ff5a5a');
-      if (touch) btns.push({ id: 'mash', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: 'MASH!', action: 'primary' });
+      if (touch) btns.push({ id: 'mash', x: W - btnR - 18, y: H - btnR - 70, r: btnR, label: this.dropText.btn || 'MASH!', action: 'primary' });
     } else if (mode === 'rhythm') {
       const Rh = M.rh;
-      bigText(ctx, 'AIR PADDLE WITH GARY!', W / 2, H * 0.2, head, '#5dffd0');
+      bigText(ctx, this.dropText.title || 'AIR PADDLE WITH GARY!', W / 2, H * 0.2, head, '#5dffd0');
       bigText(ctx, touch ? 'HIT ◀ / ▶ WHEN THEY LIGHT UP' : 'PRESS ◀ / ▶ WHEN THEY LIGHT UP', W / 2, H * 0.2 + 30, sub, '#fff');
       if (Rh) {
         const n = Rh.beats.length;

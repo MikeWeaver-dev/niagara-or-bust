@@ -91,18 +91,20 @@ export function lumenMultiplier(save = state) {
 export const isOwned = (kind, id, save = state) =>
   (kind === 'character' ? save.owned.characters : save.owned.crafts).includes(id);
 
-// Vessels unlock in order; the Golden Goose needs literally everything else.
+// Classic vessels unlock in order (band instruments can be bought any time); the Golden Goose needs literally everything else.
 export function lockReason(kind, id, save = state) {
   if (isOwned(kind, id, save)) return null;
   if (kind === 'craft') {
-    const idx = CRAFTS.findIndex((c) => c.id === id);
+    const chain = CRAFTS.filter((c) => !c.band);
+    const idx = chain.findIndex((c) => c.id === id);
+    if (idx < 0) return null;
     if (id === 'goose') {
       const missing =
         CRAFTS.filter((c) => c.id !== 'goose' && !save.owned.crafts.includes(c.id)).length +
         CHARACTERS.filter((c) => !save.owned.characters.includes(c.id)).length;
       if (missing > 0) return `Unlock everything else first (${missing} left)`;
-    } else if (idx > 0 && !save.owned.crafts.includes(CRAFTS[idx - 1].id)) {
-      return `Unlock ${CRAFTS[idx - 1].short} first`;
+    } else if (idx > 0 && !save.owned.crafts.includes(chain[idx - 1].id)) {
+      return `Unlock ${chain[idx - 1].short} first`;
     }
   }
   return null;

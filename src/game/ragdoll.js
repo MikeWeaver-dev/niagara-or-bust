@@ -1,5 +1,5 @@
 // Ragdolls for the side-view drop: humans and Kacey the giraffe. Breakable for gore.
-import { drawHead, taper, reticulate } from './charArt.js';
+import { drawHead, taper, reticulate, sleevesOf, drawStink } from './charArt.js';
 import { shade, TAU } from './util.js';
 import { RAINBOW } from '../data/characters.js';
 
@@ -303,8 +303,9 @@ function drawHumanRag(ctx, rag, lw, t) {
   const shorts = kid || ch.extras.includes('hawaiian');
   const shinCol = shorts ? c.skin : ch.dress ? '#3a3040' : c.pants;
   const thighCol = ch.dress ? c.shirt : c.pants;
-  const upCol = ch.id === 'bobby' ? c.skin : shorts ? c.shirt : c.shirt;
-  const loCol = ch.id === 'bobby' || shorts ? c.skin : c.shirt;
+  const sleeves = sleevesOf(ch);
+  const upCol = sleeves === 'none' ? c.skin : c.shirt;
+  const loCol = sleeves === 'long' ? c.shirt : c.skin;
   const ankle = (k, f) => ({ x: f.x + (k.x - f.x) * 0.12, y: f.y + (k.y - f.y) * 0.12 });
 
   const leg = (thigh, shin, knee, foot, dark) => {
@@ -488,6 +489,7 @@ function drawHumanRag(ctx, rag, lw, t) {
     stump(ctx, b.a, b.b, w, style, lw, i + 3, t);
     stump(ctx, b.b, b.a, w, style, lw, i + 7, t);
   });
+  if (ch.extras.includes('stink')) drawStink(ctx, P.chest.x, P.chest.y, 0.3 * s, 0.75 * s, t, lw);
 }
 
 function drawGiraffeRag(ctx, rag, lw, t) {

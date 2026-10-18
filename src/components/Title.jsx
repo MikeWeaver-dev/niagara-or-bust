@@ -21,49 +21,52 @@ export default function Title() {
   return (
     <>
       <MenuBackground />
-      <div className="screen center">
-        <div className="corner-l">
+      <div className="screen title-screen">
+        {/* in the page flow (not floating) so the logo can never slide under them on short phones */}
+        <div className="title-top">
           <div className="kt-note">Go Kids Table!!!</div>
-          {canFullscreen() && (
-            <button className="icon-btn" aria-label="Fullscreen" onClick={toggleFullscreen}>
-              ⛶
-            </button>
-          )}
-        </div>
-        <div className="corner">
-          <Lumens />
-        </div>
-        <h1 className="logo">
-          <span className="l1">NIAGARA</span>
-          <span className="or">or</span>
-          <span className="l2">BUST!</span>
-        </h1>
-        <div className="tagline">Survive the Horseshoe Falls. (You won't.)</div>
-        <div className="menu-buttons">
-          <button className="btn big" onClick={go('/play')}>
-            ▶ PLAY
-          </button>
-          <div className="menu-row">
-            <button className="btn teal" onClick={go('/shop')}>
-              🛒 SHOP
-            </button>
-            <button className="btn pink" onClick={go('/cheats')}>
-              🐟 CHEATS{activeCheats ? ` (${activeCheats})` : ''}
-            </button>
-          </div>
-          <div className="menu-row">
-            <button className="btn blue" onClick={go('/how')}>
-              ❓ HOW TO
-            </button>
-            <button className="btn gray" onClick={go('/settings')}>
-              ⚙ SETTINGS
-            </button>
+          <div className="title-top-r">
+            {canFullscreen() && (
+              <button className="icon-btn" aria-label="Fullscreen" onClick={toggleFullscreen}>
+                ⛶
+              </button>
+            )}
+            <Lumens />
           </div>
         </div>
-        <div className="stat-line">
-          RUNS {stats.runs} · SURVIVED {stats.survived} · DEATHS {stats.died} · BEST STREAK {stats.bestStreak} · LIMBS LOST {stats.limbs}
+        <div className="title-main">
+          <h1 className="logo">
+            <span className="l1">NIAGARA</span>
+            <span className="or">or</span>
+            <span className="l2">BUST!</span>
+          </h1>
+          <div className="tagline">Survive the Horseshoe Falls. (You won't.)</div>
+          <div className="menu-buttons">
+            <button className="btn big" onClick={go('/play')}>
+              ▶ PLAY
+            </button>
+            <div className="menu-row">
+              <button className="btn teal" onClick={go('/shop')}>
+                🛒 SHOP
+              </button>
+              <button className="btn pink" onClick={go('/cheats')}>
+                🐟 CHEATS{activeCheats ? ` (${activeCheats})` : ''}
+              </button>
+            </div>
+            <div className="menu-row">
+              <button className="btn blue" onClick={go('/how')}>
+                ❓ HOW TO
+              </button>
+              <button className="btn gray" onClick={go('/settings')}>
+                ⚙ SETTINGS
+              </button>
+            </div>
+          </div>
+          <div className="stat-line">
+            RUNS {stats.runs} · SURVIVED {stats.survived} · DEATHS {stats.died} · BEST STREAK {stats.bestStreak} · LIMBS LOST {stats.limbs}
+          </div>
+          <div className="foot">Please do not actually go over Niagara Falls. It is illegal, and also Niagara Falls.</div>
         </div>
-        <div className="foot">Please do not actually go over Niagara Falls. It is illegal, and also Niagara Falls.</div>
       </div>
     </>
   );

@@ -42,7 +42,20 @@ Turn it on in **Settings** or with the **😈 HARD** chip on the loadout screen.
 | Jet Ski + Parachute | 34% | TURBO (smash logs) | **Deploy the chute** in the green altitude zone |
 | The Golden Goose | **100%** | FLAP (fly) + lays golden eggs | Glide down like royalty (flap to float, steer anywhere) |
 
-The Golden Goose unlocks last, after *everything* else, and you always survive with it.
+### Kids Table instruments (buy any time)
+
+Anyone can ride the band's instruments. A band member riding **their own** instrument gets **+15% survival**, a constant stream of music notes, and a "YAYYYYY ... IS ON THEIR FAVORITE INSTRUMENT!!!" cheer. Each one borrows a classic vessel's handling and drop, re-themed.
+
+| Instrument | Whose | Base | River ability | Drop mini-game |
+|---|---|---|---|---|
+| Keyboard | BT | 24% | KEY CHANGE (jump) | Surf down the falls on it |
+| Electric Guitar | Mike | 26% | STAGE DIVE (roll, invulnerable) | Tilt the headstock into the green, then SHRED |
+| Trumpet | Ryan | 26% | BLAST (rocket forward) | Hold the high note, let go in the green (don't crack it) |
+| Bass Guitar | Max | 27% | DROP THE BASS (dash) | Lock in the groove: ◀ ▶ on the beat |
+| Drum Kit | Andy | 31% | SOUNDPROOF (-75% damage) | DRUM ROLL: mash |
+| Microphone (drawn from scratch) | Amy | 25% | HIGH NOTE (hop) | MIC DROP: tap when the ring lines up to let go and dive |
+
+The Golden Goose unlocks last, after *everything* else (band included), and you always survive with it.
 
 ## Characters
 
@@ -51,6 +64,7 @@ The Golden Goose unlocks last, after *everything* else, and you always survive w
 * **Kacey the Rainbow Giraffe**: four legs, a very long neck, and rainbow glitter gore.
 * **Bobby Leach** (1911): steel barrel. Later died after slipping on an orange peel. Watch the beach.
 * **Jean Lussier** (1928): rode a giant rubber ball with 32 inner tubes.
+* **Kids Table, the band:** Ryan (loves Peter's soul mustache), BT (master of COMPUTAHHHH), Mike (secretly Chinese), Amy (smokes too tough and will be killed), Max (really stinky) and Andy (fathered a son named Franky). Drawn from the band's own artwork, minus the instruments, which they ride instead.
 
 ## Economy
 
@@ -66,21 +80,23 @@ Secret codes: `SALMON`, `IDDQD`, `GOD`, `BLOODBATH`, `KABOOM`, `POOP`, `ZAP`, `B
 
 ## Gore
 
-The gore setting can be **OFF / ON / MAX** (MAX is the default). Adults get streaking blood, spurting arteries, torn stumps with bone and marrow, chunks of meat, organs and intestines, blood on the rocks, in the water and splattered across the screen. Kacey bleeds rainbow glitter. Every now and then a death is **explosive diarrhea** instead. Characters shout their (spoken) last words on the way down. OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
+The gore setting can be **OFF / ON / MAX** (MAX is the default). Adults get streaking blood, spurting arteries, torn stumps with bone and marrow, chunks of meat, organs and intestines, blood on the rocks, in the water and splattered across the screen. Kacey bleeds rainbow glitter. Every now and then a death is **explosive diarrhea** instead. Every death and every survival plays one of the band's own recorded noises, picked at random (the browser's synth voice is only a fallback). OFF turns every death into cartoon bonks and ghosts, so it's kid friendly.
 
 Knocked out in the river? You come to after 5 seconds.
 
 ## Tech
 
 * Vite + React 18 + React Router 6 (the basename follows Vite's `base`: `/games/niagaraorbust/` in production, `/game/` locally).
-* All game rendering is hand-drawn vector art on a 2D `<canvas>`, so there are no image assets.
+* Game rendering is hand-drawn vector art on a 2D `<canvas>`. The only image files are the band's five instrument SVGs (`src/assets/instruments`, cleaned up from `Assets/itemsToRide`), loaded on first use.
 * A custom Verlet physics engine runs the ragdolls, with breakable joints for the gore.
-* The whole soundtrack and every sound effect are **synthesized live with the Web Audio API**. There are no audio files.
+* The soundtrack and sound effects are **synthesized live with the Web Audio API**. The exceptions are the band's recorded death and survival noises (`src/assets/sounds`, renamed copies of `Assets/deathNoises` and `Assets/survivalNoises`). A run downloads just the two clips it might need.
+* The raw `Assets/` folder (original SVGs with their reference photos, original recordings) stays on your computer and isn't committed. To add more noises, drop `.m4a` files into `src/assets/sounds/death` or `src/assets/sounds/survive`; they're picked up automatically.
 * Progress is saved in `localStorage`, per device.
 
 ```
 src/
-  audio/      audio.js (synth SFX engine), music.js (sequencer + 7 original songs)
+  assets/     instrument SVGs + the band's recorded death/survival noises
+  audio/      audio.js (synth SFX engine), music.js (sequencer + 7 original songs), clips.js (recorded noises)
   data/       characters, vessels, cheats, death/survival messages
   game/       Game.js loop, river.js (bank + river + salmon), drop.js (the falls),
               physics.js, ragdoll.js, fx.js particles, *Art.js renderers, hud.js, input.js

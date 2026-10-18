@@ -8,9 +8,12 @@ import { RW, RIVER_LEN, brinkAt, laneOf, LANE_NAME, LANE_BONUS, LANE_TIP, comput
 import * as art from './riverArt.js';
 import { drawUpright, drawSalmonTop, drawBear, drawCat, GARY, BORDER_AGENT as AGENT } from './charArt.js';
 import { drawCraftTop, kayakPaddle, canoePaddle } from './vesselArt.js';
+import { preloadInstrument } from './instrumentArt.js';
 import { drawButton, drawJoystick, pill, bar, lumenIcon } from './hud.js';
 import { OUCH, SCREAMS, lastWords, VOICE_PITCH } from '../data/messages.js';
-import { SALMON } from '../data/crafts.js';
+import { SALMON, isFavorite } from '../data/crafts.js';
+import { RAINBOW } from '../data/characters.js';
+import { clips } from '../audio/clips.js';
 
 const CHUNK = 16;
 const DEATH_LABEL = { lightning: 'DIED FROM LIGHTNING', randombear: 'MAULED BY A BEAR', shot: 'SHOT DEAD' };
@@ -20,6 +23,7 @@ const SNIPERS = [
   { id: 'tourist', kind: 'human', scale: 0.98, headScale: 1, hat: 'cap', extras: [], colors: { skin: '#8a5634', hair: '#1a1a1a', shirt: '#ffd23b', shirt2: '#fff', collar: '#fff', pants: '#2b3a67', shoes: '#fff', hat: '#2456b8', hatBand: '#fff', accent: '#fff' } },
 ];
 const BODY_HP = 60;
+const INST_COLOR = { keyboard: '#d0202a', guitar: '#ff9a4a', trumpet: '#e8b84a', bass: '#3fd08e', drums: '#a8402e', mic: '#c8ccd4' };
 const ENTER_HOP = { nothing: 0.6, lifejacket: 1.9, surfboard: 1.1, barrel: 0.9, kayak: 0.35, canoe: 0.35, hamster: 1.0, jetski: 1.7, goose: 1.3, salmon: 1.4 };
 const DEBRIS_KINDS = ['tire', 'duck', 'cone', 'cart', 'flamingo', 'crate'];
 const ROCK_COLORS = ['#6e6a66', '#7a726a', '#5f6066', '#81776c', '#6a645c'];
@@ -31,6 +35,11 @@ export class River {
     this.cheats = cheats;
     this.salmon = !!cheats.salmon;
     this.craft = this.salmon ? SALMON : craft;
+    // band instruments borrow a classic vessel's handling ("mech"); art and sounds still use craft.id
+    this.mech = this.salmon ? 'salmon' : craft.like || craft.id;
+    this.fav = !this.salmon && isFavorite(craft, character);
+    this.noteT = 0;
+    if (craft.band) preloadInstrument(craft.id);
     this.ch = character;
     this.fx = new FX('top');
     this.fx.onLand = (p) => this.onParticleLand(p);
@@ -218,6 +227,7 @@ export class River {
       lane: laneOf(p.x),
       speed: p.vd,
       cheats: this.cheats,
+      fav: this.fav,
     });
   }
   say(str, color = '#fff', size = 24) {
@@ -238,6 +248,7 @@ export class River {
   update(dt) {
     this.t += dt;
     this.modeT += dt;
+    if (this.favBanner) this.favBanner.t -= dt;
     const p = this.p;
     const inp = this.g.input;
     const cheats = this.cheats;
@@ -375,6 +386,7 @@ export class River {
       this.enterFrom = { x: p.x, d: p.d };
       const id = this.craft.id;
       if (id === 'jetski') audio.revUp();
+      else if (this.craft.band) audio.instrument(id, 'riff');
       else if (id === 'goose') audio.honk();
       else if (id === 'hamster') audio.boing();
       else if (id === 'barrel') audio.thunk();
@@ -406,7 +418,7 @@ export class River {
       const k = (T - 0.5) / 0.6;
       p.walking = false;
       p.d = lerp(-0.2, 1.4, k);
-      p.z = Math.sin(k * Math.PI) * (ENTER_HOP[this.craft.id] || 1);
+      p.z = Math.sin(k * Math.PI) * (ENTER_HOP[this.craft.id] || ENTER_HOP[this.mech] || 1);
       if (this.craft.id === 'nothing') p.rot = k * 1.4; // faceplant
     } else {
       if (!this.flags.splashed) {
@@ -419,6 +431,7 @@ export class River {
         if (this.craft.id === 'lifejacket') this.say('CANNONBALL!', '#fff', 26);
         else if (this.craft.id === 'nothing') this.say('FACEPLANT!', '#fff', 26);
         else if (this.craft.id === 'goose') this.say('HONK!', '#ffd23b', 30);
+        else if (this.fav) this.cheerFavorite();
         else this.say('HERE WE GO!', '#fff', 24);
         p.vd = 2;
       }
@@ -483,7 +496,7 @@ export class River {
     const latAccel = (p.wrecked ? 12 : C.latAccel) * powerMul;
     const latMax = (p.wrecked ? 4.2 : C.latMax) * (cheats.superPaddle ? 1.5 : 1) * (turbo ? 1.7 : 1) * (panic ? 1.5 : 1);
     p.vx += ax * latAccel * dt;
-    const drag = C.id === 'hamster' ? 0.9 : Math.abs(ax) < 0.1 ? 3.2 : 1.1;
+    const drag = this.mech === 'hamster' ? 0.9 : Math.abs(ax) < 0.1 ? 3.2 : 1.1;
     p.vx *= Math.exp(-drag * dt);
     p.vx = clamp(p.vx, -latMax, latMax);
 
@@ -502,8 +515,19 @@ export class River {
     this.paddleT -= dt;
     if ((Math.abs(ax) > 0.3 || Math.abs(ay) > 0.3) && this.paddleT <= 0 && !p.ko) {
       this.paddleT = 0.32;
-      if (C.id !== 'jetski' && C.id !== 'goose') audio.paddle();
+      if (C.band) {
+        if (this.fav && Math.random() < 0.5) audio.instrument(C.id);
+      } else if (C.id !== 'jetski' && C.id !== 'goose') audio.paddle();
       if (Math.random() < 0.35) this.fx.splash(p.x + (ax >= 0 ? -0.7 : 0.7), p.d - 0.2, 0.15);
+    }
+
+    // a band member on their own instrument never stops playing
+    if (this.fav && !p.wrecked && !p.ko) {
+      this.noteT -= dt;
+      if (this.noteT <= 0) {
+        this.noteT = rand(0.18, 0.34);
+        this.fx.notes(p.x + rand(-0.3, 0.3), p.d, 1, 0.9 + p.z);
+      }
     }
 
     // jumping
@@ -515,7 +539,7 @@ export class River {
         if (p.vz < -4) {
           this.fx.splash(p.x, p.d, 0.6);
           audio.splash(0.5);
-          if (C.id === 'surfboard' && p.inRapids) {
+          if (this.mech === 'surfboard' && p.inRapids) {
             this.trick('SICK LANDING!', 2);
           }
         }
@@ -530,11 +554,11 @@ export class River {
       if (p.joltT <= 0) {
         p.joltT = rand(0.22, 0.45);
         if (p.z <= 0) {
-          p.vx += rand(-3.2, 3.2) * (C.id === 'barrel' ? 0.5 : 1);
+          p.vx += rand(-3.2, 3.2) * (this.mech === 'barrel' ? 0.5 : 1);
           this.fx.splash(p.x, p.d, 0.25);
           this.g.shake(0.25);
-          if (C.id === 'surfboard' && !p.wrecked) this.trick('SHRED!', 1);
-          if (C.id === 'hamster') p.vz = 3;
+          if (this.mech === 'surfboard' && !p.wrecked) this.trick('SHRED!', 1);
+          if (this.mech === 'hamster') p.vz = 3;
         }
       }
     }
@@ -630,7 +654,7 @@ export class River {
         break;
       case 'brace':
         audio.thunk();
-        this.say('BRACED!', '#ffd23b', 22);
+        this.say(C.band ? 'SOUNDPROOF!' : 'BRACED!', '#ffd23b', 22);
         break;
       case 'roll':
         audio.splash(0.6);
@@ -644,17 +668,36 @@ export class River {
         else if (ay < -0.3) p.vd += 4;
         audio.paddle();
         setTimeout(() => audio.paddle(), 90);
-        this.say('STROKE!', '#fff', 20);
-        if (Math.random() < 0.5) this.fx.text('GARY: "WHY?!"', p.x, p.d + 1.5, '#9ef', 16, 1, 1.4);
+        if (C.band) this.say('WUB WUB!', '#5dffd0', 22);
+        else this.say('STROKE!', '#fff', 20);
+        if (C.passenger && Math.random() < 0.5) this.fx.text('GARY: "WHY?!"', p.x, p.d + 1.5, '#9ef', 16, 1, 1.4);
         break;
       }
       case 'turbo':
-        audio.revUp();
-        this.say('TURBO!', '#2bb6ff', 26);
+        if (C.band) this.say('BLAST!', '#ffd23b', 26);
+        else {
+          audio.revUp();
+          this.say('TURBO!', '#2bb6ff', 26);
+        }
         break;
       default:
         break;
     }
+    if (C.band && !p.wrecked && id !== 'panic') {
+      audio.instrument(C.id, 'riff');
+      this.fx.notes(p.x, p.d, this.fav ? 5 : 2, 1);
+    }
+    if (this.ch.id === 'bt' && id !== 'panic' && Math.random() < 0.4) this.fx.text('COMPUTAHHHH!', p.x, p.d - 1.2, '#7fffd4', 24, 1.4, 1.4);
+  }
+
+  // a band member riding their own instrument
+  cheerFavorite() {
+    const p = this.p;
+    audio.instrument(this.craft.id, 'riff');
+    audio.yay(this.voice());
+    this.fx.notes(p.x, p.d, 10, 0.6);
+    this.fx.confetti(p.x, p.d, 30);
+    this.favBanner = { t: 3.2, name: this.ch.name };
   }
 
   trick(label, lumens) {
@@ -822,7 +865,8 @@ export class River {
       audio.oof(this.voice());
       this.fx.text(pick(OUCH), p.x, p.d, '#ff5a5a', 22, 1, 1);
     } else {
-      switch (C.id) {
+      if (C.band) audio.instrument(C.id, 'hit');
+      switch (this.mech) {
         case 'barrel':
           audio.thunk();
           break;
@@ -838,7 +882,7 @@ export class River {
           audio.crack();
       }
       if (speed > 3) audio.oof(this.voice());
-      this.fx.debris(p.x - nx * 0.5, p.d - nd * 0.5, C.id === 'hamster' ? '#bfeaff' : C.id === 'jetski' ? '#e8203a' : '#8a5a2b', 3, 0.15, 0.3, C.id === 'hamster' ? 'shard' : 'plank');
+      this.fx.debris(p.x - nx * 0.5, p.d - nd * 0.5, INST_COLOR[C.id] || (C.id === 'hamster' ? '#bfeaff' : C.id === 'jetski' ? '#e8203a' : '#8a5a2b'), 3, 0.15, 0.3, C.id === 'hamster' ? 'shard' : 'plank');
     }
     this.damage(dmg, o.type);
   }
@@ -857,9 +901,13 @@ export class River {
       p.hp = p.maxHp = BODY_HP;
       p.invuln = 1;
       const C = this.craft;
-      const col = { barrel: '#8a5a2b', kayak: '#ff4f2b', canoe: '#2e8b57', surfboard: '#ffe14d', hamster: '#bfeaff', jetski: '#e8203a' }[C.id] || '#888';
+      const col = INST_COLOR[C.id] || { barrel: '#8a5a2b', kayak: '#ff4f2b', canoe: '#2e8b57', surfboard: '#ffe14d', hamster: '#bfeaff', jetski: '#e8203a' }[C.id] || '#888';
       this.fx.debris(p.x, p.d, col, 18, 0.35, 0.3, C.id === 'hamster' ? 'shard' : 'plank');
-      if (C.id === 'jetski') {
+      if (C.band) {
+        audio.instrument(C.id, 'hit');
+        audio.shatter();
+        this.fx.notes(p.x, p.d, 5, 0.5);
+      } else if (C.id === 'jetski') {
         audio.boom(0.6);
         this.fx.fire(p.x, p.d, 20);
         this.fx.smoke(p.x, p.d, 10);
@@ -909,7 +957,7 @@ export class River {
       this.splat.add(3, style, 1);
     } else this.fx.stars(p.x, p.d, 7, 0.8);
     audio.splat(1);
-    audio.say(lastWords(this.ch.id, style === 'poop'), VOICE_PITCH[this.ch.id] || 1);
+    if (!clips.play('death')) audio.say(lastWords(this.ch.id, style === 'poop'), VOICE_PITCH[this.ch.id] || 1);
     audio.stopEngine();
     this.g.shake(1.2);
     this.fx.text(DEATH_LABEL[cause] || 'YOU DIED.', p.x, p.d, '#ff3b3b', 34, 1.6, 2.6);
@@ -1378,6 +1426,7 @@ export class River {
       audio.chomp();
       audio.rip();
       audio.splat(1.4);
+      clips.play('death', { delay: 0.2 });
       audio.crack();
       this.g.shake(2);
       this.fx.text('RIIIIIP!', p.x, p.d + 1, '#ff3b3b', 44, 2.5, 1.6);
@@ -1833,7 +1882,7 @@ export class River {
     if (p.ko) return { pose: 'limp', expr: 'ko', cutY: -110 };
     const prog = clamp(p.d / RIVER_LEN, 0, 1);
     let expr = prog < 0.35 ? 'determined' : prog < 0.75 ? 'scared' : 'terrified';
-    if (this.ch.id === 'timmy' && prog < 0.6) expr = 'happy';
+    if ((this.ch.id === 'timmy' || this.fav) && prog < 0.6) expr = 'happy';
     if (this.mode === 'brink') expr = 'scream';
     if (p.hitT > 0) expr = 'hurt';
     if (p.spin > 0.3) expr = 'dizzy';
@@ -1859,6 +1908,21 @@ export class River {
         return { pose: 'hold', expr, cutY: -82, armL: 0.7, armR: 0.7, bendL: 1.4, bendR: 1.4 };
       case 'goose':
         return { pose: p.abil > 0 ? 'cheer' : 'hold', expr, cutY: -86 };
+      // the band, playing along as they go
+      case 'keyboard':
+        return { pose: 'arms-out', expr };
+      case 'guitar':
+      case 'bass': {
+        const strum = Math.sin(t * (id === 'bass' ? 7 : 11)) * 0.35;
+        return { pose: 'hold', expr, cutY: -92, armL: 1.15, bendL: 0.9, armR: 0.75 + strum, bendR: 1.2 };
+      }
+      case 'trumpet':
+      case 'mic':
+        return { pose: 'hold', expr, cutY: -82, armL: 0.7, armR: 0.7, bendL: 1.4, bendR: 1.4 };
+      case 'drums': {
+        const hit = Math.sin(t * 14) * 0.4;
+        return { pose: 'hold', expr, cutY: -100, armL: 0.95 + hit, armR: 0.95 - hit, bendL: 1.1, bendR: 1.1 };
+      }
       default:
         return { pose: 'stand', expr };
     }
@@ -1965,6 +2029,23 @@ export class River {
           vessel(side * S * 1.7, S * 0.1 - Math.abs(step) * S * 0.08, step * 0.14, 0.7, { t, active: Math.sin(t * 2) > 0.95 });
           me();
           break;
+        case 'keyboard':
+        case 'guitar':
+        case 'bass':
+          // carried overhead like a rock star walking on stage
+          me({ pose: p.slip > 0 ? 'flail' : 'cheer' });
+          vessel(0, -S * 1.95 + Math.abs(step) * S * 0.05, id === 'keyboard' ? step * 0.04 : Math.PI / 2 + step * 0.04, id === 'keyboard' ? 0.62 : 0.58);
+          break;
+        case 'trumpet':
+        case 'mic':
+          vessel(side * S * 1.1, -S * 0.55 + Math.abs(step) * S * 0.04, side * 0.5, 0.5);
+          me();
+          break;
+        case 'drums':
+          // wheeled along on a road case
+          vessel(side * S * 1.7, S * 0.05 + Math.abs(step) * S * 0.03, step * 0.03, 0.55);
+          me();
+          break;
         default:
           me();
       }
@@ -1993,7 +2074,7 @@ export class River {
       const rolling = this.craft.ability.id === 'roll' && p.abil > 0 && !p.wrecked;
       if (rolling) {
         ctx.scale(1, -0.8);
-        drawCraftTop(ctx, 'kayak', S, { t, damage: 1 - p.hp / p.maxHp });
+        drawCraftTop(ctx, this.effCraftId, S, { t, damage: 1 - p.hp / p.maxHp });
       } else {
         drawCraftTop(ctx, this.effCraftId, S, {
           t,
@@ -2084,6 +2165,20 @@ export class River {
         bigText(ctx, 'FALLS', W - 17, top - 12, 11, '#9ef');
         bigText(ctx, `${Math.max(0, Math.floor(brinkAt(p.x) - p.d))}m`, W - 17, bot + 14, 12);
       }
+    }
+
+    // "YAYYYYY <NAME> IS ON THEIR FAVORITE INSTRUMENT!!!"
+    if (this.favBanner && this.favBanner.t > 0) {
+      const B = this.favBanner;
+      const k = Math.min(1, (3.2 - B.t) * 4);
+      const fade = Math.min(1, B.t * 2);
+      const size = Math.min(30, W * 0.062) * easeOutBack(k);
+      const col = RAINBOW[Math.floor(t * 8) % RAINBOW.length];
+      ctx.save();
+      ctx.globalAlpha = fade;
+      bigText(ctx, `YAYYYYY ${B.name.toUpperCase()} IS ON THEIR`, W / 2, H * 0.3, size, col);
+      bigText(ctx, 'FAVORITE INSTRUMENT!!!', W / 2, H * 0.3 + size * 1.2, size, '#fff');
+      ctx.restore();
     }
 
     // controls

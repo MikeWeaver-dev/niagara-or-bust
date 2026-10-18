@@ -232,6 +232,14 @@ export class FX {
     }
   }
 
+  // music notes floating up off an instrument
+  notes(x, y, n = 1, z = 0.8) {
+    for (let i = 0; i < n; i++) {
+      const top = this.mode !== 'side';
+      this.add({ x: x + rand(-0.4, 0.4), y: y + rand(-0.3, 0.3), z: z + rand(0, 0.4), vx: rand(-0.8, 0.8), vy: top ? rand(-0.4, 0.4) : rand(-2.4, -1.2), vz: top ? rand(1.6, 2.6) : 0, life: rand(1.1, 1.8), size: rand(0.16, 0.24), color: pick(['#ffd23b', '#ff5cd6', '#5dffd0', '#ffffff', '#8b9cff', '#ff8a2b']), kind: 'note', grav: 0, drag: 0.6, vr: 0, rot: rand(-0.3, 0.3), flag: Math.random() < 0.5 ? 1 : 2, wob: rand(0, TAU) });
+    }
+  }
+
   bubbles(x, y, n = 6) {
     for (let i = 0; i < n; i++) {
       this.add({ x: x + rand(-0.4, 0.4), y: y + rand(-0.2, 0.3), z: 0, vx: rand(-0.3, 0.3), vy: this.mode === 'side' ? rand(-2.5, -1) : rand(-0.3, 0.3), vz: 0.5, life: rand(0.6, 1.4), size: rand(0.05, 0.14), color: '#e8fbff', kind: 'bubble', grav: 0, drag: 0.5 });
@@ -280,7 +288,7 @@ export class FX {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.z += p.vz * dt;
-        if (p.z < 0 && p.kind !== 'cloud' && p.kind !== 'foam' && p.kind !== 'smoke' && p.kind !== 'fire' && p.kind !== 'mist' && p.kind !== 'stink') {
+        if (p.z < 0 && p.kind !== 'cloud' && p.kind !== 'foam' && p.kind !== 'smoke' && p.kind !== 'fire' && p.kind !== 'mist' && p.kind !== 'stink' && p.kind !== 'note') {
           if (this.onLand && this.onLand(p, dt) === false) {
             this.p.splice(i, 1);
             continue;
@@ -655,6 +663,48 @@ export class FX {
           ctx.fill();
           ctx.restore();
           break;
+        case 'note': {
+          // eighth note (or two beamed) with an ink outline so it reads on water and sky
+          const wx = q.x + Math.sin(this.time * 5 + p.wob) * s * 0.5;
+          ctx.save();
+          ctx.translate(wx, q.y);
+          ctx.rotate(p.rot + Math.sin(this.time * 4 + p.wob) * 0.15);
+          ctx.fillStyle = p.color;
+          ctx.strokeStyle = '#1d1226';
+          ctx.lineWidth = Math.max(1.2, s * 0.14);
+          const head = (hx) => {
+            ctx.beginPath();
+            ctx.ellipse(hx, 0, s * 0.42, s * 0.3, -0.4, 0, TAU);
+            ctx.fill();
+            ctx.stroke();
+          };
+          const stem = (hx) => {
+            ctx.beginPath();
+            ctx.moveTo(hx + s * 0.36, -s * 0.05);
+            ctx.lineTo(hx + s * 0.36, -s * 1.3);
+            ctx.stroke();
+          };
+          if (p.flag === 2) {
+            head(-s * 0.5);
+            head(s * 0.5);
+            stem(-s * 0.5);
+            stem(s * 0.5);
+            ctx.lineWidth = Math.max(2, s * 0.3);
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.14, -s * 1.25);
+            ctx.lineTo(s * 0.86, -s * 1.35);
+            ctx.stroke();
+          } else {
+            head(0);
+            stem(0);
+            ctx.beginPath();
+            ctx.moveTo(s * 0.36, -s * 1.3);
+            ctx.quadraticCurveTo(s * 0.9, -s * 0.95, s * 0.75, -s * 0.5);
+            ctx.stroke();
+          }
+          ctx.restore();
+          break;
+        }
         case 'bubble':
           ctx.strokeStyle = 'rgba(255,255,255,0.9)';
           ctx.lineWidth = 1.5;

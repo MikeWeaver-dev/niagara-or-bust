@@ -1,5 +1,6 @@
 // Survival odds: base by vessel, plus where you go over (lane), damage, speed and skill.
 import { clamp } from './util.js';
+import { FAV_BONUS } from '../data/crafts.js';
 
 export const RW = 9; // river half-width (metres-ish)
 export const RIVER_LEN = 280; // distance from the launch beach to the brink at the centre
@@ -20,11 +21,12 @@ export const LANE_TIP = {
 
 export const speedBonus = (speed) => clamp((speed - 8) * 0.012, -0.05, 0.05);
 
-export function computeOdds({ craft, hpRatio = 1, wrecked = false, ko = false, lane = 'mid', speed = 8, bonus = 0, cheats = {} }) {
+// fav: a band member riding their own instrument
+export function computeOdds({ craft, hpRatio = 1, wrecked = false, ko = false, lane = 'mid', speed = 8, bonus = 0, cheats = {}, fav = false }) {
   if (cheats.god) return 1;
   if (cheats.alwaysDie) return 0;
   if (craft.alwaysSurvive && !wrecked) return 1;
-  let p = (wrecked ? 0.11 : craft.base) + LANE_BONUS[lane] - (1 - clamp(hpRatio, 0, 1)) * 0.18 + speedBonus(speed) + bonus;
+  let p = (wrecked ? 0.11 : craft.base + (fav ? FAV_BONUS : 0)) + LANE_BONUS[lane] - (1 - clamp(hpRatio, 0, 1)) * 0.18 + speedBonus(speed) + bonus;
   if (ko) p = Math.min(p, 0.07);
   return clamp(p, 0.07, 0.92);
 }

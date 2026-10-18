@@ -6,7 +6,9 @@ import { RAINBOW } from '../data/characters.js';
 
 export const OUTLINE = '#1d1226';
 const SOFT = 'rgba(32,18,24,0.78)';
-const EYES = { annie: '#5d7fa3', timmy: '#5b8a3c', bobby: '#4a2e1a', jean: '#3b5f86', gary: '#3a6e8e', kacey: '#3a2416', tourist: '#4a3420' };
+const EYES = { annie: '#5d7fa3', timmy: '#5b8a3c', bobby: '#4a2e1a', jean: '#3b5f86', gary: '#3a6e8e', kacey: '#3a2416', tourist: '#4a3420', ryan: '#5f86a8', bt: '#3a2416', mike: '#4f6b5a', amy: '#5e4632', max: '#4c6f8e', andy: '#5b7a8c' };
+// legacy characters picked their hair by id; newer ones say so in their data
+const hairStyleOf = (ch) => ch.hairStyle || { annie: 'bun', timmy: 'kid', bobby: 'slick' }[ch.id] || 'side';
 const LIP = (skin) => shade(skin, -0.28);
 
 // Canadian border services officer (Kacey's biggest fan)
@@ -165,7 +167,7 @@ function drawHumanFront(ctx, ch, r, expr, t, lw) {
     ctx.ellipse(s * r * 0.5, h * 0.3, r * 0.22, h * 0.1, 0, 0, TAU);
     ctx.fill();
   });
-  if (ch.extras.includes('beard') || ch.id === 'bobby') {
+  if (ch.extras.includes('beard') || ch.extras.includes('scruff') || ch.id === 'bobby') {
     ctx.fillStyle = 'rgba(60,40,30,0.18)';
     ctx.beginPath();
     ctx.ellipse(0, h * 0.72, r * 0.72, h * 0.35, 0, 0, Math.PI);
@@ -232,8 +234,8 @@ function drawHumanFront(ctx, ch, r, expr, t, lw) {
   drawMouthFront(ctx, ch, r, h, expr, t, lw);
   drawFacialHair(ctx, ch, r, h, lw, 'front');
   if (ch.extras.includes('glasses') && expr !== 'cool') {
-    ctx.strokeStyle = '#8a7650';
-    ctx.lineWidth = lw * 0.6;
+    ctx.strokeStyle = ch.glasses || '#8a7650';
+    ctx.lineWidth = lw * (ch.glasses ? 0.95 : 0.6);
     [-1, 1].forEach((s) => {
       ctx.beginPath();
       ctx.ellipse(s * ex, eyeY, ew * 1.25, ew * 0.95, 0, 0, TAU);
@@ -439,6 +441,7 @@ function drawMouthFront(ctx, ch, r, h, expr, t, lw) {
     ctx.strokeStyle = lip;
     ctx.lineWidth = lw * 1.2;
     ctx.stroke();
+    if (ch.extras.includes('cigarette')) drawCigarette(ctx, r * 0.16, y + r * 0.02, 0.45, r, lw, t);
     return;
   }
   const smile = expr === 'happy' ? 1 : expr === 'cool' ? 0.5 : 0;
@@ -468,6 +471,37 @@ function drawMouthFront(ctx, ch, r, h, expr, t, lw) {
   ctx.beginPath();
   ctx.ellipse(0, y + r * 0.07, r * 0.1, r * 0.025, 0, 0, TAU);
   ctx.fill();
+  if (ch.extras.includes('cigarette')) drawCigarette(ctx, r * 0.2, y + r * 0.01, 0.4, r, lw, t);
+}
+
+// a cigarette hanging from the mouth, ember glowing, smoke curling up
+function drawCigarette(ctx, x, y, ang, r, lw, t) {
+  const len = r * 0.62;
+  const w = r * 0.085;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.fillStyle = '#d99a52';
+  ctx.fillRect(0, -w / 2, len * 0.3, w);
+  ctx.fillStyle = '#f4f1ea';
+  ctx.fillRect(len * 0.3, -w / 2, len * 0.62, w);
+  ctx.strokeStyle = 'rgba(60,40,40,0.6)';
+  ctx.lineWidth = lw * 0.4;
+  ctx.strokeRect(0, -w / 2, len * 0.92, w);
+  const glow = 0.75 + Math.sin(t * 5) * 0.25;
+  ctx.fillStyle = `rgba(255,${Math.round(80 + glow * 60)},40,1)`;
+  ctx.fillRect(len * 0.92, -w / 2, len * 0.08, w);
+  ctx.restore();
+  // smoke rises straight up, whatever angle the head is at
+  const ex = x + Math.cos(ang) * len;
+  const ey = y + Math.sin(ang) * len;
+  for (let k = 0; k < 3; k++) {
+    const u = (t * 0.6 + k / 3) % 1;
+    ctx.fillStyle = `rgba(230,230,235,${0.45 * (1 - u)})`;
+    ctx.beginPath();
+    ctx.arc(ex + Math.sin(u * 7 + k) * r * 0.12, ey - u * r * 1.1, r * (0.06 + u * 0.12), 0, TAU);
+    ctx.fill();
+  }
 }
 
 function drawSunglasses(ctx, r, eyeY, ex, ew, lw, view) {
@@ -542,6 +576,36 @@ function drawFacialHair(ctx, ch, r, h, lw, view) {
     }
     ctx.stroke();
   }
+  if (ch.extras.includes('scruff')) {
+    ctx.fillStyle = shade(c.hair, -0.12);
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    if (side) {
+      ctx.moveTo(r * 0.72, h * 0.48);
+      ctx.quadraticCurveTo(r * 0.86, h * 0.42, r * 0.99, h * 0.46);
+      ctx.lineTo(r * 0.95, h * 0.51);
+      ctx.quadraticCurveTo(r * 0.84, h * 0.49, r * 0.72, h * 0.53);
+      ctx.closePath();
+      ctx.moveTo(r * 0.62, h * 0.74);
+      ctx.quadraticCurveTo(r * 0.84, h * 0.7, r * 0.9, h * 0.74);
+      ctx.quadraticCurveTo(r * 0.86, h * 0.95, r * 0.62, h * 0.94);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(-r * 0.33, h * 0.53);
+      ctx.quadraticCurveTo(-r * 0.2, h * 0.41, 0, h * 0.44);
+      ctx.quadraticCurveTo(r * 0.2, h * 0.41, r * 0.33, h * 0.53);
+      ctx.quadraticCurveTo(r * 0.18, h * 0.49, 0, h * 0.5);
+      ctx.quadraticCurveTo(-r * 0.18, h * 0.49, -r * 0.33, h * 0.53);
+      ctx.closePath();
+      ctx.moveTo(-r * 0.22, h * 0.73);
+      ctx.quadraticCurveTo(0, h * 0.68, r * 0.22, h * 0.73);
+      ctx.quadraticCurveTo(r * 0.17, h * 0.99, 0, h * 1.01);
+      ctx.quadraticCurveTo(-r * 0.17, h * 0.99, -r * 0.22, h * 0.73);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   if (ch.extras.includes('beard')) {
     ctx.fillStyle = shade(c.hair, -0.05);
     ctx.globalAlpha = 0.92;
@@ -579,12 +643,26 @@ function drawHairBack(ctx, ch, r, h, lw) {
   ctx.fillStyle = shade(c.hair, -0.1);
   ctx.strokeStyle = SOFT;
   ctx.lineWidth = lw * 0.8;
-  if (ch.id === 'annie') {
+  const style = hairStyleOf(ch);
+  if (style === 'bun') {
     ctx.beginPath();
     ctx.ellipse(0, -h * 0.25, r * 1.18, h * 0.85, 0, 0, TAU);
     ctx.fill();
     ctx.stroke();
-  } else if (ch.id === 'jean' || ch.id === 'gary' || ch.id === 'tourist') {
+  } else if (style === 'long') {
+    // long straight hair falling past the shoulders
+    ctx.fillStyle = vgrad(ctx, -h, h * 2, shade(c.hair, -0.05), shade(c.hair, -0.22));
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 1.08);
+    ctx.bezierCurveTo(r * 1.25, -h * 1.05, r * 1.32, -h * 0.2, r * 1.28, h * 0.8);
+    ctx.quadraticCurveTo(r * 1.36, h * 1.6, r * 1.08, h * 2.05);
+    ctx.lineTo(-r * 1.08, h * 2.05);
+    ctx.quadraticCurveTo(-r * 1.36, h * 1.6, -r * 1.28, h * 0.8);
+    ctx.bezierCurveTo(-r * 1.32, -h * 0.2, -r * 1.25, -h * 1.05, 0, -h * 1.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (style === 'side') {
     ctx.beginPath();
     ctx.ellipse(0, -h * 0.32, r * 1.06, h * 0.75, 0, Math.PI * 0.95, Math.PI * 2.05);
     ctx.fill();
@@ -606,7 +684,74 @@ function drawHairFront(ctx, ch, r, h, lw, t) {
   };
   ctx.strokeStyle = SOFT;
   ctx.lineWidth = lw * 0.7;
-  if (ch.id === 'annie') {
+  const style = hairStyleOf(ch);
+  if (style === 'messy') {
+    // tousled: a mop with tufts on top and choppy bangs
+    ctx.fillStyle = vgrad(ctx, -h * 1.2, -h * 0.3, shade(hair, 0.16), shade(hair, -0.12));
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.02, -h * 0.08);
+    ctx.bezierCurveTo(-r * 1.2, -h * 0.82, -r * 0.55, -h * 1.16, -r * 0.05, -h * 1.1);
+    ctx.quadraticCurveTo(r * 0.12, -h * 1.3, r * 0.3, -h * 1.1);
+    ctx.quadraticCurveTo(r * 0.58, -h * 1.24, r * 0.66, -h * 1.0);
+    ctx.bezierCurveTo(r * 1.08, -h * 0.9, r * 1.12, -h * 0.42, r * 1.0, -h * 0.08);
+    ctx.quadraticCurveTo(r * 0.93, -h * 0.42, r * 0.72, -h * 0.5);
+    ctx.quadraticCurveTo(r * 0.6, -h * 0.34, r * 0.4, -h * 0.5);
+    ctx.quadraticCurveTo(r * 0.2, -h * 0.38, 0, -h * 0.55);
+    ctx.quadraticCurveTo(-r * 0.22, -h * 0.4, -r * 0.42, -h * 0.56);
+    ctx.quadraticCurveTo(-r * 0.66, -h * 0.42, -r * 0.82, -h * 0.5);
+    ctx.quadraticCurveTo(-r * 0.97, -h * 0.4, -r * 1.02, -h * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    strands([
+      [-r * 0.7, -h * 0.75, r * 0.1, -h * 0.95, -r * 0.35, -h * 1.0],
+      [-r * 0.2, -h * 0.7, r * 0.6, -h * 0.8, r * 0.25, -h * 0.98],
+      [r * 0.5, -h * 0.62, r * 0.85, -h * 0.35, r * 0.85, -h * 0.65],
+      [-r * 0.85, -h * 0.6, -r * 0.6, -h * 0.85, -r * 0.92, -h * 0.85],
+    ]);
+    return;
+  }
+  if (style === 'short') {
+    // close crop that hugs the skull
+    ctx.fillStyle = vgrad(ctx, -h * 1.1, -h * 0.4, shade(hair, 0.18), shade(hair, -0.05));
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.99, -h * 0.18);
+    ctx.bezierCurveTo(-r * 1.12, -h * 1.33, r * 1.12, -h * 1.36, r * 0.99, -h * 0.18);
+    ctx.quadraticCurveTo(r * 0.92, -h * 0.44, r * 0.6, -h * 0.58);
+    ctx.quadraticCurveTo(r * 0.2, -h * 0.68, -r * 0.1, -h * 0.64);
+    ctx.quadraticCurveTo(-r * 0.62, -h * 0.6, -r * 0.88, -h * 0.44);
+    ctx.quadraticCurveTo(-r * 0.97, -h * 0.34, -r * 0.99, -h * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    strands([
+      [-r * 0.5, -h * 0.78, r * 0.3, -h * 0.84, -r * 0.1, -h * 0.94],
+      [r * 0.05, -h * 0.72, r * 0.7, -h * 0.6, r * 0.45, -h * 0.82],
+    ], shade(hair, 0.25));
+    return;
+  }
+  if (style === 'long') {
+    // centre part, curtains framing the face and covering the ears
+    ctx.fillStyle = vgrad(ctx, -h * 1.1, h * 1.2, shade(hair, 0.14), shade(hair, -0.12));
+    [-1, 1].forEach((s) => {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.04, -h * 1.05);
+      ctx.bezierCurveTo(s * r * 0.72, -h * 1.08, s * r * 1.14, -h * 0.7, s * r * 1.13, -h * 0.05);
+      ctx.quadraticCurveTo(s * r * 1.18, h * 0.6, s * r * 1.02, h * 1.3);
+      ctx.quadraticCurveTo(s * r * 0.9, h * 0.5, s * r * 0.86, -h * 0.05);
+      ctx.quadraticCurveTo(s * r * 0.78, -h * 0.5, s * r * 0.36, -h * 0.68);
+      ctx.quadraticCurveTo(s * r * 0.14, -h * 0.8, s * r * 0.04, -h * 1.05);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      strands([
+        [s * r * 0.15, -h * 0.98, s * r * 1.0, -h * 0.1, s * r * 0.85, -h * 0.85],
+        [s * r * 1.0, h * 0.0, s * r * 0.98, h * 1.0, s * r * 1.08, h * 0.5],
+      ]);
+    });
+    return;
+  }
+  if (style === 'bun') {
     ctx.fillStyle = vgrad(ctx, -h, -h * 0.1, shade(hair, 0.15), shade(hair, -0.1));
     [-1, 1].forEach((s) => {
       ctx.beginPath();
@@ -624,7 +769,7 @@ function drawHairFront(ctx, ch, r, h, lw, t) {
     });
     return;
   }
-  if (ch.id === 'timmy') {
+  if (style === 'kid') {
     ctx.fillStyle = hair;
     for (let i = -3; i <= 3; i++) {
       ctx.beginPath();
@@ -641,7 +786,7 @@ function drawHairFront(ctx, ch, r, h, lw, t) {
     });
     return;
   }
-  if (ch.id === 'bobby') {
+  if (style === 'slick') {
     ctx.fillStyle = hair;
     ctx.beginPath();
     ctx.moveTo(-r * 0.98, -h * 0.05);
@@ -799,6 +944,56 @@ function drawHat(ctx, ch, r, h, lw, t, view) {
       ctx.fill();
       break;
     }
+    case 'beanie': {
+      // knit beanie pulled low, folded cuff with a little label
+      const ox = side ? -r * 0.08 : 0;
+      const top = -h * 1.17;
+      const cuffTop = -h * 0.66;
+      const cuffBot = -h * 0.38;
+      ctx.fillStyle = hgrad(ctx, -r + ox, r + ox, c.hat);
+      ctx.beginPath();
+      ctx.moveTo(ox - r * 1.04, cuffTop + h * 0.04);
+      ctx.bezierCurveTo(ox - r * 1.1, top, ox + r * 1.1, top, ox + r * 1.04, cuffTop + h * 0.04);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = shade(c.hat, -0.28);
+      ctx.lineWidth = lw * 0.45;
+      for (let k = -3; k <= 3; k++) {
+        ctx.beginPath();
+        ctx.moveTo(ox + k * r * 0.27, cuffTop);
+        ctx.quadraticCurveTo(ox + k * r * 0.24, -h * 0.95, ox + k * r * 0.1, -h * 1.12);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.fillStyle = vgrad(ctx, cuffTop, cuffBot, shade(c.hatBand, 0.12), c.hatBand);
+      ctx.strokeStyle = SOFT;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(ox - r * 1.1, cuffTop);
+      ctx.quadraticCurveTo(ox, cuffTop - h * 0.1, ox + r * 1.1, cuffTop);
+      ctx.lineTo(ox + r * 1.08, cuffBot);
+      ctx.quadraticCurveTo(ox, cuffBot - h * 0.08, ox - r * 1.08, cuffBot);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = shade(c.hatBand, -0.3);
+      ctx.lineWidth = lw * 0.4;
+      for (let k = -9; k <= 9; k++) {
+        ctx.beginPath();
+        ctx.moveTo(ox + k * r * 0.11, cuffTop - h * 0.02 - (1 - Math.abs(k / 9)) * h * 0.07);
+        ctx.lineTo(ox + k * r * 0.11, cuffBot - h * 0.01 - (1 - Math.abs(k / 9)) * h * 0.06);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#d9dde4';
+      ctx.strokeStyle = 'rgba(30,30,40,0.6)';
+      const lx = side ? ox + r * 0.35 : -r * 0.5;
+      ctx.fillRect(lx, (cuffTop + cuffBot) / 2 - h * 0.1, r * 0.42, h * 0.08);
+      ctx.strokeRect(lx, (cuffTop + cuffBot) / 2 - h * 0.1, r * 0.42, h * 0.08);
+      break;
+    }
     case 'beret': {
       const g = ctx.createRadialGradient(-r * 0.2, -h * 0.95, r * 0.1, 0, -h * 0.8, r * 1.2);
       g.addColorStop(0, shade(c.hat, 0.25));
@@ -827,11 +1022,26 @@ function drawHumanProfile(ctx, ch, r, expr, t, lw) {
   const c = ch.colors;
   const kid = ch.id === 'timmy';
   const h = r * (kid ? 1.12 : 1.27);
+  const hs = hairStyleOf(ch);
   ctx.fillStyle = shade(c.hair, -0.1);
-  if (ch.id === 'annie') {
+  if (hs === 'bun') {
     ctx.beginPath();
     ctx.arc(-r * 0.7, -h * 0.45, r * 0.42, 0, TAU);
     ctx.fill();
+  }
+  if (hs === 'long') {
+    // hair hanging down the back to the shoulders
+    ctx.fillStyle = vgrad(ctx, -h, h * 2, shade(c.hair, -0.05), shade(c.hair, -0.25));
+    ctx.strokeStyle = SOFT;
+    ctx.lineWidth = lw * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.2, -h * 1.02);
+    ctx.bezierCurveTo(-r * 1.3, -h * 1.0, -r * 1.45, h * 0.6, -r * 1.25, h * 1.9);
+    ctx.lineTo(-r * 0.25, h * 1.95);
+    ctx.quadraticCurveTo(-r * 0.4, h * 0.9, -r * 0.2, h * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
   ctx.beginPath();
   ctx.moveTo(-r * 0.15, h * 0.85);
@@ -915,6 +1125,15 @@ function drawHumanProfile(ctx, ch, r, expr, t, lw) {
     ctx.closePath();
     ctx.fill();
   }
+  if (ch.extras.includes('glasses') && expr !== 'cool') {
+    ctx.strokeStyle = ch.glasses || '#8a7650';
+    ctx.lineWidth = lw * (ch.glasses ? 0.9 : 0.6);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.66, ey, r * 0.2, r * 0.17, 0, 0, TAU);
+    ctx.moveTo(r * 0.46, ey - r * 0.02);
+    ctx.lineTo(-r * 0.08, ey + h * 0.04);
+    ctx.stroke();
+  }
   ctx.fillStyle = shade(c.skin, -0.4);
   ctx.beginPath();
   ctx.ellipse(r * 0.98, h * 0.31, r * 0.05, r * 0.025, 0.3, 0, TAU);
@@ -936,6 +1155,7 @@ function drawHumanProfile(ctx, ch, r, expr, t, lw) {
     ctx.moveTo(r * 0.97, h * 0.53);
     ctx.lineTo(r * 0.8, h * (expr === 'happy' ? 0.5 : 0.55));
     ctx.stroke();
+    if (ch.extras.includes('cigarette') && expr !== 'hurt') drawCigarette(ctx, r * 0.94, h * 0.54, 0.25, r, lw, t);
   }
   if (ch.id === 'annie') {
     ctx.strokeStyle = 'rgba(110,60,50,0.35)';
@@ -957,8 +1177,30 @@ function drawHumanProfile(ctx, ch, r, expr, t, lw) {
     ctx.lineTo(r * 0.35, -h * 0.3);
     ctx.lineTo(r * 0.1, -h * 0.45);
     ctx.quadraticCurveTo(-r * 0.4, -h * 0.4, -r * 0.5, h * 0.05);
+  } else if (hs === 'messy') {
+    ctx.moveTo(-r * 0.98, h * 0.15);
+    ctx.bezierCurveTo(-r * 1.32, -h * 0.7, -r * 0.7, -h * 1.12, -r * 0.2, -h * 1.1);
+    ctx.quadraticCurveTo(-r * 0.05, -h * 1.3, r * 0.15, -h * 1.08);
+    ctx.quadraticCurveTo(r * 0.45, -h * 1.22, r * 0.5, -h * 1.0);
+    ctx.quadraticCurveTo(r * 0.95, -h * 0.95, r * 0.98, -h * 0.42);
+    ctx.quadraticCurveTo(r * 0.75, -h * 0.4, r * 0.62, -h * 0.55);
+    ctx.quadraticCurveTo(r * 0.45, -h * 0.42, r * 0.25, -h * 0.55);
+    ctx.quadraticCurveTo(-r * 0.25, -h * 0.5, -r * 0.35, -h * 0.05);
+    ctx.quadraticCurveTo(-r * 0.4, h * 0.2, -r * 0.6, h * 0.28);
+  } else if (hs === 'short') {
+    ctx.moveTo(-r * 0.92, h * 0.05);
+    ctx.bezierCurveTo(-r * 1.28, -h * 1.18, r * 0.45, -h * 1.34, r * 0.86, -h * 0.5);
+    ctx.quadraticCurveTo(r * 0.5, -h * 0.6, r * 0.2, -h * 0.58);
+    ctx.quadraticCurveTo(-r * 0.2, -h * 0.52, -r * 0.3, -h * 0.1);
+    ctx.quadraticCurveTo(-r * 0.4, h * 0.1, -r * 0.55, h * 0.12);
+  } else if (hs === 'long') {
+    ctx.moveTo(-r * 0.95, h * 0.5);
+    ctx.bezierCurveTo(-r * 1.3, -h * 0.95, r * 0.5, -h * 1.18, r * 0.9, -h * 0.4);
+    ctx.quadraticCurveTo(r * 0.55, -h * 0.65, r * 0.15, -h * 0.55);
+    ctx.quadraticCurveTo(-r * 0.15, -h * 0.4, -r * 0.2, h * 0.1);
+    ctx.quadraticCurveTo(-r * 0.3, h * 0.45, -r * 0.6, h * 0.55);
   } else {
-    ctx.moveTo(-r * 0.95, h * (ch.id === 'annie' ? 0.3 : 0.2));
+    ctx.moveTo(-r * 0.95, h * (hs === 'bun' ? 0.3 : 0.2));
     ctx.bezierCurveTo(-r * 1.25, -h * 0.95, r * 0.5, -h * 1.15, r * 0.88, -h * 0.45);
     ctx.quadraticCurveTo(r * 0.5, -h * 0.62, r * 0.2, -h * 0.55);
     ctx.quadraticCurveTo(-r * 0.25, -h * 0.5, -r * 0.35, -h * 0.05);
@@ -1494,6 +1736,7 @@ export function drawUpright(ctx, ch, S, opts = {}) {
     ctx.quadraticCurveTo(0, top + 7 * s, 5 * s, top);
     ctx.fill();
   }
+  drawClothingDetails(ctx, ch, s, lw, { top, wy, by, tw, waist });
   if (ch.extras.includes('scarf')) {
     ctx.fillStyle = hgrad(ctx, -9 * s, 9 * s, c.collar);
     ctx.strokeStyle = SOFT;
@@ -1548,16 +1791,16 @@ export function drawUpright(ctx, ch, S, opts = {}) {
   const upW = (strong ? 14 : kid ? 8.5 : 10.5) * s;
   const foreW = (strong ? 11.5 : kid ? 7 : 8.5) * s;
   const wrist = (strong ? 7.5 : 5.2) * s;
-  const shortSleeve = ch.id === 'bobby' || ch.extras.includes('hawaiian') || kid;
-  const sleeveLo = shortSleeve ? c.skin : c.shirt;
+  const sleeves = sleevesOf(ch);
+  const sleeveLo = sleeves === 'long' ? c.shirt : c.skin;
   [[sk.shL, sk.elL, sk.handL], [sk.shR, sk.elR, sk.handR]].forEach(([sh, el, hd]) => {
     if (ch.dress) {
       taper(ctx, sh, el, upW * 1.6, upW * 0.85, c.shirt, lw, { bulge: 3 * s });
-    } else if (kid || ch.extras.includes('hawaiian')) {
+    } else if (sleeves === 'short') {
       const mid = { x: sh.x + (el.x - sh.x) * 0.55, y: sh.y + (el.y - sh.y) * 0.55 };
       taper(ctx, mid, el, upW * 0.85, foreW * 1.05, c.skin, lw);
       taper(ctx, sh, mid, upW * 1.25, upW * 1.15, c.shirt, lw);
-    } else if (ch.id === 'bobby') {
+    } else if (sleeves === 'none') {
       taper(ctx, sh, el, upW, foreW * 1.02, c.skin, lw, { bulge: 2.5 * s });
     } else {
       taper(ctx, sh, el, upW, foreW * 1.02, c.shirt, lw, { bulge: 0.8 * s });
@@ -1592,8 +1835,134 @@ export function drawUpright(ctx, ch, S, opts = {}) {
   ctx.rotate(Math.sin(t * 1.7) * 0.04 + (pose === 'flail' ? Math.sin(t * 13) * 0.18 : 0));
   drawHead(ctx, ch, sk.headR, { expr, t, view: 'front', lw });
   ctx.restore();
+  if (ch.extras.includes('stink')) drawStink(ctx, 0, (sk.neck.y + sk.pelvis.y) / 2, 34 * s, 70 * s, t, lw);
   ctx.restore();
   return sk;
+}
+
+export const sleevesOf = (ch) => ch.sleeves || (ch.id === 'bobby' ? 'none' : ch.id === 'timmy' || ch.extras.includes('hawaiian') ? 'short' : 'long');
+
+// Necklines and trims for the band's everyday clothes (front view)
+function drawClothingDetails(ctx, ch, s, lw, { top, wy, by, tw, waist }) {
+  const c = ch.colors;
+  const ex = ch.extras;
+  ctx.lineJoin = 'round';
+  if (ex.includes('tee') || ex.includes('sweater')) {
+    // crew neck
+    ctx.strokeStyle = shade(c.shirt, -0.28);
+    ctx.lineWidth = (ex.includes('sweater') ? 3.4 : 2.2) * s;
+    ctx.beginPath();
+    ctx.moveTo(-6.5 * s, top + 0.5 * s);
+    ctx.quadraticCurveTo(0, top + 8.5 * s, 6.5 * s, top + 0.5 * s);
+    ctx.stroke();
+  }
+  if (ex.includes('sweater')) {
+    // ribbed hem
+    ctx.fillStyle = shade(c.shirt, -0.12);
+    ctx.fillRect(-waist * 1.02, by - 6 * s, waist * 2.04, 5 * s);
+    ctx.strokeStyle = shade(c.shirt, -0.35);
+    ctx.lineWidth = lw * 0.4;
+    for (let x = -waist; x <= waist; x += 2.6 * s) {
+      ctx.beginPath();
+      ctx.moveTo(x, by - 6 * s);
+      ctx.lineTo(x, by - 1 * s);
+      ctx.stroke();
+    }
+  }
+  if (ex.includes('buttonup')) {
+    // collar points, placket and buttons
+    ctx.fillStyle = shade(c.shirt, 0.12);
+    ctx.strokeStyle = SOFT;
+    ctx.lineWidth = lw * 0.7;
+    [-1, 1].forEach((sd) => {
+      ctx.beginPath();
+      ctx.moveTo(sd * 1 * s, top + 4 * s);
+      ctx.lineTo(sd * 8.5 * s, top - 1 * s);
+      ctx.lineTo(sd * 6 * s, top + 8 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.strokeStyle = shade(c.shirt, -0.3);
+    ctx.lineWidth = lw * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(1.2 * s, top + 5 * s);
+    ctx.lineTo(1.2 * s, by - 1 * s);
+    ctx.stroke();
+    ctx.fillStyle = '#f4f8fb';
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.arc(3 * s, top + 12 * s + k * 9 * s, 1.1 * s, 0, TAU);
+      ctx.fill();
+    }
+  }
+  if (ex.includes('hoodie')) {
+    // hood bunched around the neck, drawstrings, front pocket
+    ctx.fillStyle = shade(c.shirt, 0.08);
+    ctx.strokeStyle = SOFT;
+    ctx.lineWidth = lw * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-12 * s, top + 1 * s);
+    ctx.quadraticCurveTo(-11 * s, top - 6 * s, 0, top - 6.5 * s);
+    ctx.quadraticCurveTo(11 * s, top - 6 * s, 12 * s, top + 1 * s);
+    ctx.quadraticCurveTo(6 * s, top + 9 * s, 0, top + 9 * s);
+    ctx.quadraticCurveTo(-6 * s, top + 9 * s, -12 * s, top + 1 * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = shade(c.skin, -0.05);
+    ctx.beginPath();
+    ctx.ellipse(0, top + 1.5 * s, 6 * s, 3.4 * s, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#d8d2c8';
+    ctx.lineWidth = 1.1 * s;
+    [-1, 1].forEach((sd) => {
+      ctx.beginPath();
+      ctx.moveTo(sd * 3.5 * s, top + 7 * s);
+      ctx.lineTo(sd * 4.5 * s, top + 20 * s);
+      ctx.stroke();
+    });
+    ctx.strokeStyle = shade(c.shirt, -0.4);
+    ctx.lineWidth = lw * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-waist * 0.85, wy + 2 * s);
+    ctx.lineTo(-waist * 0.62, wy - 13 * s);
+    ctx.lineTo(waist * 0.62, wy - 13 * s);
+    ctx.lineTo(waist * 0.85, wy + 2 * s);
+    ctx.stroke();
+  }
+  return tw;
+}
+
+// Green stink lines rising off someone (and a fly or two)
+export function drawStink(ctx, cx, cy, w, hgt, t, lw) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 3; k++) {
+    // two wisps off the shoulders, one above the head: never across the face
+    const x0 = cx + [-1.35, 1.35, 0.35][k] * w;
+    const y0 = k === 2 ? cy - hgt * 0.95 : cy;
+    const ph = (t * 0.7 + k * 0.37) % 1;
+    ctx.strokeStyle = `rgba(150,205,70,${0.75 * Math.sin(ph * Math.PI)})`;
+    ctx.lineWidth = Math.max(lw * 1.2, w * 0.07);
+    ctx.beginPath();
+    for (let i = 0; i <= 10; i++) {
+      const u = i / 10;
+      const y = y0 - ph * hgt * 0.5 - u * hgt * 0.7;
+      const x = x0 + Math.sin(u * 9 + t * 4 + k) * w * 0.14;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#1a1a1a';
+  for (let k = 0; k < 2; k++) {
+    const a = t * (3 + k) + k * 2;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * w * 1.1, cy - hgt * 0.55 + Math.sin(a * 1.7) * w * 0.4, Math.max(lw * 0.8, w * 0.035), 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 // Kacey, drawn as a real(ish) giraffe in three-quarter view, rainbow reticulated coat

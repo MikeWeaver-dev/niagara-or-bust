@@ -25,7 +25,7 @@ export default function HowTo() {
               <li>Your live <b>ODDS</b> are shown at the top. Going faster helps you clear the rocks at the bottom.</li>
             </ul>
             <h3>3. THE DROP</h3>
-            <p>188 feet of pure physics, and every vessel has its own mini-game: pencil-dive ring timing, inflate the life jacket (don't pop it), mash pillows into the barrel, surf the face of the falls, tilt your kayak and BOOF, air-paddle in rhythm with Gary, roll the hamster ball into the deep water, deploy the parachute in the green zone, or glide the Golden Goose. Then the dice roll on your odds. The bottom is full of rocks: some round, some pointy (impaling), some flat (pancaking).</p>
+            <p>188 feet of pure physics, and every vessel has its own mini-game: pencil-dive ring timing, inflate the life jacket (don't pop it), mash pillows into the barrel, surf the face of the falls, tilt your kayak and BOOF, air-paddle in rhythm with Gary, roll the hamster ball into the deep water, deploy the parachute in the green zone, or glide the Golden Goose. The band's instruments have their own: surf the keyboard, SHRED the guitar, hold the trumpet's high note, lock in the bass groove, drum roll, and the MIC DROP. Then the dice roll on your odds. The bottom is full of rocks: some round, some pointy (impaling), some flat (pancaking).</p>
             <h3>HARD MODE</h3>
             <p>Turn it on in Settings or on the loadout screen: tourists on the banks shoot at you with slingshots and BB guns, and they can kill you before you even reach the edge (your corpse still goes over). Grab the floating slingshot to fire back (F or the SHOOT button).</p>
             <h3>RUMORS</h3>
@@ -40,6 +40,7 @@ export default function HowTo() {
               <li><b>Bobby Leach:</b> steel barrel, 1911. Later died after slipping on an orange peel. Really.</li>
               <li><b>Jean Lussier:</b> 1928, in a giant rubber ball with 32 inner tubes.</li>
               <li><b>Lil' Timmy</b> and <b>Kacey the Rainbow Giraffe</b>: not historically accurate.</li>
+              <li><b>Kids Table</b>: Ryan (trumpet), BT (keys), Mike (guitar), Amy (vocals), Max (bass) and Andy (drums). Anyone can ride the band's instruments, but a band member on their own instrument gets <b>+15% survival</b>, music notes, and a lot of cheering.</li>
             </ul>
             <p style={{ fontSize: 13, opacity: 0.8 }}>Going over Niagara Falls in real life is illegal and usually fatal. This is a cartoon. Please stay on the bank and buy a hot dog.</p>
           </div>
